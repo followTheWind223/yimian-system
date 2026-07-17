@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.PermissionMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectAllIncludingDeleted" resultType="com.yimian.system.entity.Permission">
+        SELECT * FROM sys_permission
+        ORDER BY perm_code ASC, id ASC
+    </select>
+
+    <select id="selectByIdIncludingDeleted" resultType="com.yimian.system.entity.Permission">
+        SELECT * FROM sys_permission
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByPermCode" resultType="com.yimian.system.entity.Permission">
+        SELECT * FROM sys_permission
+        WHERE perm_code = #{permCode}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <select id="selectAnyByPermCode" resultType="com.yimian.system.entity.Permission">
+        SELECT * FROM sys_permission
+        WHERE perm_code = #{permCode}
+        LIMIT 1
+    </select>
+
+    <update id="updateBasicIncludingDeleted">
+        UPDATE sys_permission
+        SET perm_name = #{permName},
+            description = #{description}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateDeletedStatus">
+        UPDATE sys_permission
+        SET deleted = #{deleted}
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectAllPermCodes" resultType="String">
+        SELECT perm_code FROM sys_permission
+        WHERE <include refid="Not_Deleted"/>
+    </select>
+
+</mapper>

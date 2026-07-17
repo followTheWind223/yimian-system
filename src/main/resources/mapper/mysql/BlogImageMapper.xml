@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.BlogImageMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectByBlogId" resultType="com.yimian.system.entity.BlogImage">
+        SELECT id, blog_id, url, sort, created_at
+        FROM sys_blog_image
+        WHERE blog_id = #{blogId}
+          AND <include refid="Not_Deleted"/>
+        ORDER BY sort ASC
+    </select>
+
+    <update id="deleteByBlogId">
+        UPDATE sys_blog_image SET deleted = 1
+        WHERE blog_id = #{blogId}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+</mapper>

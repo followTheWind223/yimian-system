@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.CommentLikeMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectActive" resultType="com.yimian.system.entity.CommentLike">
+        SELECT id, comment_id, user_id, created_at, updated_at
+        FROM sys_comment_like
+        WHERE comment_id = #{commentId}
+          AND user_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+        LIMIT 1
+    </select>
+
+    <select id="selectAny" resultType="com.yimian.system.entity.CommentLike">
+        SELECT id, comment_id, user_id, created_at, updated_at, deleted
+        FROM sys_comment_like
+        WHERE comment_id = #{commentId}
+          AND user_id = #{userId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="softDelete">
+        UPDATE sys_comment_like
+        SET deleted = 1
+        WHERE comment_id = #{commentId}
+          AND user_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+    <update id="restore">
+        UPDATE sys_comment_like
+        SET deleted = 0
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectLikedCommentIds" resultType="Long">
+        SELECT comment_id
+        FROM sys_comment_like
+        WHERE user_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+          AND comment_id IN
+        <foreach collection="commentIds" item="commentId" open="(" separator="," close=")">
+            #{commentId}
+        </foreach>
+    </select>
+</mapper>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.LogModuleMapper">
+
+    <select id="selectByCode" resultType="com.yimian.system.entity.LogModule">
+        SELECT * FROM sys_log_module WHERE code = #{code}
+    </select>
+
+</mapper>

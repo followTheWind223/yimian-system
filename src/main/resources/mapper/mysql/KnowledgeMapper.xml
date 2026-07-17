@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.KnowledgeMapper">
+
+    <sql id="Base_Column_List">
+        id, title, content, content_hash, difficulty, status,
+        audit_remark, audit_user_id, audit_time, submit_user_id,
+        view_count, like_count, collect_count, comment_count,
+        rag_doc_ids, created_at, updated_at
+    </sql>
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectByContentHash" resultType="com.yimian.system.entity.Knowledge">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_knowledge
+        WHERE content_hash = #{hash}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <select id="selectTagIdsByKnowledgeId" resultType="Long">
+        SELECT tag_id FROM sys_knowledge_tag
+        WHERE knowledge_id = #{knowledgeId}
+    </select>
+
+    <!-- 分页查询（用户端：仅审核通过） -->
+    <select id="selectPage" resultType="com.yimian.system.entity.Knowledge">
+        SELECT DISTINCT k.<include refid="Base_Column_List"/>
+        FROM sys_knowledge k
+        <if test="tagId != null">
+            INNER JOIN sys_knowledge_tag kt ON k.id = kt.knowledge_id
+        </if>
+        WHERE <include refid="Not_Deleted"/>
+        <if test="keyword != null and keyword != ''">
+            AND (k.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR k.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="difficulty != null">
+            AND k.difficulty = #{difficulty}
+        </if>
+        <if test="tagId != null">
+            AND kt.tag_id = #{tagId}
+        </if>
+        <if test="status != null">
+            AND k.status = #{status}
+        </if>
+        ORDER BY k.created_at DESC
+    </select>
+
+    <!-- 增加浏览次数 -->
+    <update id="incrementViewCount">
+        UPDATE sys_knowledge SET view_count = view_count + 1 WHERE id = #{id}
+    </update>
+
+    <update id="updateCollectCount">
+        UPDATE sys_knowledge
+        SET collect_count = GREATEST(collect_count + #{delta}, 0)
+        WHERE id = #{id}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+    <update id="updateLikeCount">
+        UPDATE sys_knowledge
+        SET like_count = GREATEST(COALESCE(like_count, 0) + #{delta}, 0)
+        WHERE id = #{id}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+    <update id="updateCommentCount">
+        UPDATE sys_knowledge
+        SET comment_count = GREATEST(COALESCE(comment_count, 0) + #{delta}, 0)
+        WHERE id = #{id}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+    <select id="selectApprovedByIds" resultType="com.yimian.system.entity.Knowledge">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_knowledge
+        WHERE <include refid="Not_Deleted"/>
+          AND status = 1
+          AND id IN
+          <foreach collection="ids" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </select>
+
+    <select id="selectHotKnowledge" resultType="com.yimian.system.entity.Knowledge">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_knowledge
+        WHERE <include refid="Not_Deleted"/>
+          AND status = 1
+        ORDER BY (
+            (
+                COALESCE(view_count, 0) * 1
+                + COALESCE(like_count, 0) * 3
+                + COALESCE(collect_count, 0) * 5
+                + COALESCE(comment_count, 0) * 2
+            ) * (1 / (1 + GREATEST(TIMESTAMPDIFF(DAY, created_at, NOW()), 0) * 0.1))
+        ) DESC, created_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 我的题目列表（分页） -->
+    <select id="selectMyPage" resultType="com.yimian.system.entity.Knowledge">
+        SELECT k.<include refid="Base_Column_List"/>
+        FROM sys_knowledge k
+        WHERE <include refid="Not_Deleted"/>
+          AND k.submit_user_id = #{userId}
+        <if test="status != null">
+            AND k.status = #{status}
+        </if>
+        ORDER BY k.created_at DESC
+    </select>
+
+</mapper>

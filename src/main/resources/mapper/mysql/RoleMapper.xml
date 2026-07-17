@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.RoleMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectAllIncludingDeleted" resultType="com.yimian.system.entity.Role">
+        SELECT * FROM sys_role
+        ORDER BY sort ASC, id ASC
+    </select>
+
+    <select id="selectByIdIncludingDeleted" resultType="com.yimian.system.entity.Role">
+        SELECT * FROM sys_role
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByRoleCode" resultType="com.yimian.system.entity.Role">
+        SELECT * FROM sys_role
+        WHERE role_code = #{roleCode}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <select id="selectAnyByRoleCode" resultType="com.yimian.system.entity.Role">
+        SELECT * FROM sys_role
+        WHERE role_code = #{roleCode}
+        LIMIT 1
+    </select>
+
+    <insert id="insertAuto" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_role (role_code, role_name, description, sort, deleted)
+        VALUES (#{roleCode}, #{roleName}, #{description}, #{sort}, #{deleted})
+    </insert>
+
+    <update id="updateBasicIncludingDeleted">
+        UPDATE sys_role
+        SET role_name = #{roleName},
+            description = #{description},
+            sort = #{sort}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateDeletedStatus">
+        UPDATE sys_role
+        SET deleted = #{deleted}
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectPermCodesByRoleId" resultType="String">
+        SELECT p.perm_code
+        FROM sys_permission p
+        INNER JOIN sys_role_permission rp ON p.id = rp.perm_id
+        WHERE rp.role_id = #{roleId}
+          AND (p.deleted IS NULL OR p.deleted = 0)
+    </select>
+
+    <delete id="deleteRolePermissions">
+        DELETE FROM sys_role_permission WHERE role_id = #{roleId}
+    </delete>
+
+    <insert id="insertRolePermissions">
+        INSERT INTO sys_role_permission (role_id, perm_id)
+        SELECT #{roleId}, p.id FROM sys_permission p
+        WHERE p.perm_code IN
+        <foreach collection="permCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND (p.deleted IS NULL OR p.deleted = 0)
+    </insert>
+
+</mapper>

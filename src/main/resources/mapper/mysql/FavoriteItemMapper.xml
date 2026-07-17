@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.FavoriteItemMapper">
+
+    <select id="selectActiveByFolderAndKnowledge" resultType="com.yimian.system.entity.FavoriteItem">
+        SELECT id, folder_id, item_type, target_id, knowledge_id, blog_id, sort, created_at, updated_at
+        FROM sys_favorite_item
+        WHERE folder_id = #{folderId}
+          AND item_type = 'knowledge'
+          AND target_id = #{knowledgeId}
+          AND (deleted IS NULL OR deleted = 0)
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveByFolderAndTarget" resultType="com.yimian.system.entity.FavoriteItem">
+        SELECT id, folder_id, item_type, target_id, knowledge_id, blog_id, sort, created_at, updated_at
+        FROM sys_favorite_item
+        WHERE folder_id = #{folderId}
+          AND item_type = #{itemType}
+          AND target_id = #{targetId}
+          AND (deleted IS NULL OR deleted = 0)
+        LIMIT 1
+    </select>
+
+    <select id="selectFolderItems" resultType="com.yimian.system.entity.FavoriteItem">
+        SELECT i.id, i.folder_id, i.item_type, i.target_id, i.knowledge_id, i.blog_id, i.sort, i.created_at, i.updated_at
+        FROM sys_favorite_item i
+        LEFT JOIN sys_knowledge k ON i.item_type = 'knowledge' AND i.target_id = k.id
+        LEFT JOIN sys_blog b ON i.item_type = 'blog' AND i.target_id = b.id
+        WHERE i.folder_id = #{folderId}
+          AND (i.deleted IS NULL OR i.deleted = 0)
+        <if test="keyword != null and keyword != ''">
+          AND (
+            k.title LIKE CONCAT('%', #{keyword}, '%')
+            OR b.title LIKE CONCAT('%', #{keyword}, '%')
+          )
+        </if>
+        ORDER BY i.created_at DESC
+    </select>
+
+    <select id="selectFoldersByUserAndKnowledge" resultType="com.yimian.system.entity.FavoriteFolder">
+        SELECT DISTINCT f.id, f.name, f.description, f.user_id, f.is_public, f.cover_image,
+               f.item_count, f.view_count, f.created_at, f.updated_at
+        FROM sys_favorite_folder f
+        INNER JOIN sys_favorite_item i ON f.id = i.folder_id
+        WHERE f.user_id = #{userId}
+          AND i.item_type = 'knowledge'
+          AND i.target_id = #{knowledgeId}
+          AND (f.deleted IS NULL OR f.deleted = 0)
+          AND (i.deleted IS NULL OR i.deleted = 0)
+        ORDER BY f.created_at DESC
+    </select>
+
+    <select id="selectFoldersByUserAndTarget" resultType="com.yimian.system.entity.FavoriteFolder">
+        SELECT DISTINCT f.id, f.name, f.description, f.user_id, f.is_public, f.cover_image,
+               f.item_count, f.view_count, f.created_at, f.updated_at
+        FROM sys_favorite_folder f
+        INNER JOIN sys_favorite_item i ON f.id = i.folder_id
+        WHERE f.user_id = #{userId}
+          AND i.item_type = #{itemType}
+          AND i.target_id = #{targetId}
+          AND (f.deleted IS NULL OR f.deleted = 0)
+          AND (i.deleted IS NULL OR i.deleted = 0)
+        ORDER BY f.created_at DESC
+    </select>
+</mapper>

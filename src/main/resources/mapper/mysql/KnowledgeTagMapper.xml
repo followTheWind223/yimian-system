@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.KnowledgeTagMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO sys_knowledge_tag (knowledge_id, tag_id) VALUES
+        <foreach collection="tagIds" item="tagId" separator=",">
+            (#{knowledgeId}, #{tagId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByKnowledgeId">
+        DELETE FROM sys_knowledge_tag WHERE knowledge_id = #{knowledgeId}
+    </delete>
+
+    <delete id="deleteByTagId">
+        DELETE FROM sys_knowledge_tag WHERE tag_id = #{tagId}
+    </delete>
+
+    <select id="selectTagIdsByKnowledgeId" resultType="Long">
+        SELECT tag_id FROM sys_knowledge_tag
+        WHERE knowledge_id = #{knowledgeId}
+    </select>
+
+</mapper>

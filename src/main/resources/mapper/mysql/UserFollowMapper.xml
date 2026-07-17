@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.UserFollowMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectActive" resultType="com.yimian.system.entity.UserFollow">
+        SELECT id, follower_id, followee_id, created_at, updated_at, deleted
+        FROM sys_user_follow
+        WHERE follower_id = #{followerId}
+          AND followee_id = #{followeeId}
+          AND <include refid="Not_Deleted"/>
+        LIMIT 1
+    </select>
+
+    <select id="selectAny" resultType="com.yimian.system.entity.UserFollow">
+        SELECT id, follower_id, followee_id, created_at, updated_at, deleted
+        FROM sys_user_follow
+        WHERE follower_id = #{followerId}
+          AND followee_id = #{followeeId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="softDelete">
+        UPDATE sys_user_follow
+        SET deleted = 1
+        WHERE follower_id = #{followerId}
+          AND followee_id = #{followeeId}
+          AND <include refid="Not_Deleted"/>
+    </update>
+
+    <update id="restore">
+        UPDATE sys_user_follow
+        SET deleted = 0
+        WHERE id = #{id}
+    </update>
+
+    <select id="countFollowing" resultType="int">
+        SELECT COUNT(*)
+        FROM sys_user_follow
+        WHERE follower_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <select id="countFollowers" resultType="int">
+        SELECT COUNT(*)
+        FROM sys_user_follow
+        WHERE followee_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <select id="selectFollowingUsers" resultType="com.yimian.system.entity.User">
+        SELECT u.id, u.username, u.email, u.phone, u.nickname, u.avatar, u.status,
+               u.created_at, u.updated_at, u.last_login_time, u.last_login_ip
+        FROM sys_user_follow f
+        INNER JOIN sys_user u ON u.id = f.followee_id
+        WHERE f.follower_id = #{userId}
+          AND (f.deleted IS NULL OR f.deleted = 0)
+          AND (u.deleted IS NULL OR u.deleted = 0)
+        ORDER BY f.created_at DESC, f.id DESC
+    </select>
+
+    <select id="selectFollowerUsers" resultType="com.yimian.system.entity.User">
+        SELECT u.id, u.username, u.email, u.phone, u.nickname, u.avatar, u.status,
+               u.created_at, u.updated_at, u.last_login_time, u.last_login_ip
+        FROM sys_user_follow f
+        INNER JOIN sys_user u ON u.id = f.follower_id
+        WHERE f.followee_id = #{userId}
+          AND (f.deleted IS NULL OR f.deleted = 0)
+          AND (u.deleted IS NULL OR u.deleted = 0)
+        ORDER BY f.created_at DESC, f.id DESC
+    </select>
+</mapper>

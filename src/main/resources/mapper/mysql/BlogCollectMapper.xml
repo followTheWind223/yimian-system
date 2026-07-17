@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.BlogCollectMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectActive" resultType="com.yimian.system.entity.BlogCollect">
+        SELECT * FROM sys_blog_collect
+        WHERE blog_id = #{blogId}
+          AND folder_id = #{folderId}
+          AND user_id = #{userId}
+          AND <include refid="Not_Deleted"/>
+        LIMIT 1
+    </select>
+
+</mapper>

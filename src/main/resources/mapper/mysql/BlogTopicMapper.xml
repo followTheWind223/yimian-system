@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.BlogTopicMapper">
+
+    <select id="selectTopicIdsByBlogId" resultType="java.lang.Long">
+        SELECT topic_id
+        FROM sys_blog_topic_relation
+        WHERE blog_id = #{blogId}
+    </select>
+
+    <delete id="deleteByBlogId">
+        DELETE FROM sys_blog_topic_relation WHERE blog_id = #{blogId}
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO sys_blog_topic_relation (blog_id, topic_id) VALUES
+        <foreach collection="topicIds" item="tid" separator=",">
+            (#{blogId}, #{tid})
+        </foreach>
+    </insert>
+
+</mapper>

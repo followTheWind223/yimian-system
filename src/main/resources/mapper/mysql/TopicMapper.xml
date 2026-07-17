@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.TopicMapper">
+
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <select id="selectAll" resultType="com.yimian.system.entity.Topic">
+        SELECT id, name, description, color, sort, blog_count, created_at, updated_at
+        FROM sys_blog_topic_category
+        WHERE <include refid="Not_Deleted"/>
+        <if test="keyword != null and keyword != ''">
+          AND name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        ORDER BY sort ASC, blog_count DESC
+    </select>
+
+    <select id="selectByIds" resultType="com.yimian.system.entity.Topic">
+        SELECT id, name, description, color, sort, blog_count, created_at, updated_at
+        FROM sys_blog_topic_category
+        WHERE <include refid="Not_Deleted"/>
+          AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        ORDER BY sort ASC
+    </select>
+
+    <update id="incrementBlogCount">
+        UPDATE sys_blog_topic_category SET blog_count = GREATEST(0, COALESCE(blog_count, 0) + #{delta})
+        WHERE id = #{id}
+    </update>
+
+</mapper>

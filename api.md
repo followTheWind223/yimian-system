@@ -1,0 +1,1638 @@
+# 用户接口
+
+---
+
+## 全局 ID 策略
+
+自 `system/sql/33-use-snowflake-id-for-user-blog-favorite-folder.sql` 起，新注册用户、新建博客、新建收藏夹的主键 ID 由后端应用通过 MyBatis-Plus `IdType.ASSIGN_ID` 生成雪花 ID，不再依赖数据库自增。
+
+---
+
+## 19. 用户公开资料与关注系统
+
+> 相关 SQL：`system/sql/27-user-follow.sql`
+
+### 19.1 查看用户公开资料
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/user/{id}` |
+| 请求方式 | `GET` |
+| 权限要求 | `user:view-public` |
+
+成功响应 `data` 为 `UserVO`。公开资料会隐藏 `email`、`phone`，`roles`、`permissions` 返回空数组。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `followingCount` | Integer | 该用户关注的人数 |
+| `followerCount` | Integer | 该用户粉丝数 |
+| `followed` | Boolean | 当前登录用户是否已关注该用户 |
+
+### 19.2 关注 / 取消关注用户
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/user/{id}/follow` |
+| 请求方式 | `POST` |
+| 权限要求 | `user:follow` |
+
+该接口为 toggle：未关注时关注，已关注时取消关注。成功响应 `data` 为更新后的公开 `UserVO`。
+
+### 19.3 查看关注 / 粉丝列表
+
+| 接口 | 方法 | 权限 | 说明 |
+|------|------|------|------|
+| `/api/user/{id}/following?page=1&size=20` | `GET` | `user:view-public` | 查看该用户关注的人 |
+| `/api/user/{id}/followers?page=1&size=20` | `GET` | `user:view-public` | 查看该用户的粉丝 |
+
+成功响应 `data` 对齐 `PageInfo<UserVO>`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+列表项为公开 `UserVO`，隐藏 `email`、`phone`、`roles`、`permissions`、`lastLoginTime`。
+
+### 19.4 题目作者头像字段
+
+`KnowledgeVO` 新增字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `submitUserAvatar` | String | 提交人头像 URL |
+| `auditUserAvatar` | String | 审核人头像 URL |
+
+### 19.5 用户公开主页内容
+
+| 接口 | 方法 | 权限 | 说明 |
+|------|------|------|------|
+| `/api/user/{id}/knowledges?page=1&size=10` | `GET` | `user:view-public` | 查看该用户发表的题目，仅返回审核通过 `status=1` 的题目 |
+| `/api/user/{id}/blogs?page=1&size=10` | `GET` | `user:view-public` | 查看该用户已发布的公开博客，仅返回 `status=1` 的博客 |
+
+成功响应 `data` 对齐 `PageInfo`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+题目列表项为 `KnowledgeVO`，博客列表项为 `BlogVO`。
+
+---
+
+## 18. 点赞系统补充
+
+> 相关 SQL：`system/sql/26-knowledge-like.sql`
+
+### 18.1 题目点赞 / 取消点赞
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/knowledge/{id}/like` |
+| 请求方式 | `POST` |
+| 权限要求 | `knowledge:like` |
+
+该接口为 toggle：未点赞时点赞，已点赞时取消点赞，并同步更新题目的 `likeCount`。
+
+成功响应 `data` 为最新点赞数：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": 12
+}
+```
+
+`KnowledgeVO` 新增字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `liked` | Boolean | 当前登录用户是否已点赞该题目 |
+
+### 18.2 博客点赞 / 取消点赞
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/blogs/{id}/like` |
+| 请求方式 | `POST` |
+| 权限要求 | `blog:like` |
+
+该接口为 toggle，成功响应 `data` 为最新点赞数。
+
+## 1. 用户注册
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/auth/register` |
+| **请求方式** | `POST` |
+| **认证要求** | 无需认证 |
+| **Content-Type** | `application/json` |
+
+### 输入参数（Request Body）
+
+```json
+{
+  "username": "zhangsan",
+  "password": "123456",
+  "email": "zhangsan@example.com",
+  "phone": "13800138000",
+  "nickname": "张三"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `username` | String | ✅ | 用户名，唯一，4-64 字符 |
+| `password` | String | ✅ | 密码，6-32 字符 |
+| `email` | String | | 邮箱，格式校验 |
+| `phone` | String | | 手机号，11 位 |
+| `nickname` | String | | 昵称，不传则默认为用户名 |
+
+### 输出参数（Response Body）
+
+**成功响应** HTTP 200：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": 201234567890123456,
+    "username": "zhangsan",
+    "email": "zhangsan@example.com",
+    "phone": "13800138000",
+    "nickname": "张三",
+    "avatar": null,
+    "status": 1,
+    "createdAt": "2026-07-12 15:30:00"
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | Integer | 状态码，200 表示成功 |
+| `message` | String | 提示信息 |
+| `data.id` | Long | 新建用户雪花 ID |
+| `data.username` | String | 用户名 |
+| `data.email` | String | 邮箱 |
+| `data.phone` | String | 手机号 |
+| `data.nickname` | String | 昵称 |
+| `data.avatar` | String | 头像（新用户为 null） |
+| `data.status` | Integer | 状态：1=正常 |
+| `data.createdAt` | String | 注册时间 |
+
+**失败响应**：
+
+| HTTP 状态码 | code | message | 触发场景 |
+|:---:|------|------|------|
+| 200 | 1001 | 用户名已存在 | username 重复 |
+| 200 | 1002 | 邮箱已被注册 | email 重复 |
+| 400 | 400 | 请求参数错误 | 参数校验不通过 |
+
+> 注意：业务异常统一返回 HTTP 200，通过 `code` 区分错误类型。参数校验失败由 Spring Validation 触发，返回 HTTP 400。
+
+### 业务规则
+
+1. 注册成功后默认分配 `ROLE_USER` 角色
+2. 密码使用 BCrypt 加密存储，不返回给前端
+3. 用户名全局唯一，邮箱也唯一（可为空）
+4. 新用户状态默认为 `1`（启用）
+
+---
+
+## 2. 用户登录
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/auth/login` |
+| **请求方式** | `POST` |
+| **认证要求** | 无需认证 |
+| **Content-Type** | `application/json` |
+
+### 输入参数（Request Body）
+
+```json
+{
+  "username": "admin",
+  "password": "admin123",
+  "captchaKey": "uuid-xxx",
+  "captcha": "abcd"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `username` | String | ✅ | 用户名 |
+| `password` | String | ✅ | 密码 |
+| `captchaKey` | String | | 验证码 key（预留） |
+| `captcha` | String | | 验证码（预留） |
+
+### 输出参数（Response Body）
+
+**成功响应** HTTP 200：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 7200,
+    "permissions": ["user:list","user:create","role:list","perm:list","self:profile", "..."],
+    "userInfo": {
+      "id": 1,
+      "username": "admin",
+      "email": "admin@example.com",
+      "phone": null,
+      "nickname": "系统管理员",
+      "avatar": null,
+      "roles": ["ROLE_ADMIN"],
+      "permissions": ["user:list","user:create","role:list","perm:list","self:profile", "..."],
+      "status": 1,
+      "createdAt": "2026-07-12 10:00:00",
+      "lastLoginTime": "2026-07-12 15:30:00"
+    }
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | Integer | 状态码，200 表示成功 |
+| `message` | String | 提示信息 |
+| `data.accessToken` | String | 访问令牌（2 小时有效） |
+| `data.refreshToken` | String | 刷新令牌（7 天有效） |
+| `data.tokenType` | String | Token 类型，固定为 `Bearer` |
+| `data.expiresIn` | Long | 过期时间（秒） |
+| `data.permissions` | Array | 权限编码列表，前端可用于按钮显隐 |
+| `data.userInfo.id` | Long | 用户 ID |
+| `data.userInfo.username` | String | 用户名 |
+| `data.userInfo.email` | String | 邮箱 |
+| `data.userInfo.phone` | String | 手机号 |
+| `data.userInfo.nickname` | String | 昵称 |
+| `data.userInfo.avatar` | String | 头像 URL |
+| `data.userInfo.roles` | Array | 角色编码列表，如 `["ROLE_ADMIN"]` |
+| `data.userInfo.permissions` | Array | 权限编码列表，如 `["user:create"]` |
+| `data.userInfo.status` | Integer | 状态：1=正常，0=禁用，2=锁定 |
+| `data.userInfo.createdAt` | String | 注册时间 |
+| `data.userInfo.lastLoginTime` | String | 最后登录时间 |
+
+**失败响应**：
+
+| HTTP 状态码 | code | message | 触发场景 |
+|:---:|------|------|------|
+| 200 | 1003 | 用户不存在 | username 未注册 |
+| 200 | 1004 | 密码错误 | password 不匹配 |
+| 200 | 1005 | 账号已被禁用 | status ≠ 1 |
+| 400 | 400 | 请求参数错误 | 参数校验不通过 |
+
+---
+
+## 2.1 管理员登录
+
+管理员后台专用登录入口，登录成功后额外校验 `ROLE_ADMIN` 角色，否则拒绝。
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/auth/admin/login` |
+| **请求方式** | `POST` |
+| **认证要求** | 无需认证 |
+| **Content-Type** | `application/json` |
+
+### 输入参数（Request Body）
+
+请求体与 [`/auth/login`](#2-用户登录) 完全一致（`LoginDto`）。
+
+```json
+{
+  "username": "admin",
+  "password": "admin123"
+}
+```
+
+### 输出参数（Response Body）
+
+成功响应结构同 [`/auth/login`](#2-用户登录)（`LoginVO`），此处不再赘述。
+
+**失败响应**：
+
+| HTTP 状态码 | code | message | 触发场景 |
+|:---:|------|------|------|
+| 200 | 1003 | 用户不存在 | username 未注册 |
+| 200 | 1004 | 密码错误 | password 不匹配 |
+| 200 | 1005 | 账号已被禁用 | status ≠ 1 |
+| 200 | 403 | 无权限访问 | 登录成功但用户无 `ROLE_ADMIN` 角色 |
+| 400 | 400 | 请求参数错误 | 参数校验不通过 |
+
+---
+
+## 2.2 用户端登录
+
+用户端专用登录入口，语义独立，允许所有角色登录（包括管理员）。便于将来差异化（如用户端增加验证码、并发限制等）。
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/auth/user/login` |
+| **请求方式** | `POST` |
+| **认证要求** | 无需认证 |
+| **Content-Type** | `application/json` |
+
+### 输入参数（Request Body）
+
+请求体与 [`/auth/login`](#2-用户登录) 完全一致（`LoginDto`）。
+
+### 输出参数（Response Body）
+
+成功响应结构同 [`/auth/login`](#2-用户登录)（`LoginVO`）。
+
+**失败响应**：
+
+| HTTP 状态码 | code | message | 触发场景 |
+|:---:|------|------|------|
+| 200 | 1003 | 用户不存在 | username 未注册 |
+| 200 | 1004 | 密码错误 | password 不匹配 |
+| 200 | 1005 | 账号已被禁用 | status ≠ 1 |
+| 400 | 400 | 请求参数错误 | 参数校验不通过 |
+
+---
+
+## 3. 个人中心
+
+> **认证要求**：需携带 Token。
+
+### 3.1 查询个人信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/user/profile` |
+| **请求方式** | `GET` |
+
+返回当前登录用户的完整信息（含角色和权限列表）。
+
+### 3.2 修改个人信息
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/user/profile` |
+| **请求方式** | `PUT` |
+
+```json
+{ "nickname": "新昵称", "email": "new@example.com", "phone": "13800000000", "avatar": "/api/file/avatar/2026/07/13/xxx.jpg" }
+```
+
+所有字段可选，不传不更新。**不能修改密码**。`avatar` 字段为头像访问 URL，由前端先调通用上传接口 `POST /api/file/upload` 获取后传入。
+
+| 失败场景 | code | 说明 |
+|------|------|------|
+| 邮箱已被注册 | 1002 | email 重复 |
+
+### 3.3 修改密码
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/user/password` |
+| **请求方式** | `PUT` |
+
+```json
+{ "oldPassword": "旧密码", "newPassword": "新密码" }
+```
+
+| 失败场景 | code | 说明 |
+|------|------|------|
+| 旧密码错误 | 1004 | 密码错误 |
+
+
+---
+
+## 4. 用户管理（管理员）
+
+> **认证要求**：需携带 Token，且用户具有 `ROLE_ADMIN` 角色。
+> **请求头**：`Authorization: Bearer <token>`
+
+### 4.1 用户列表
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users` |
+| **请求方式** | `GET` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:---:|--------|------|
+| `page` | int | | 1 | 页码 |
+| `size` | int | | 10 | 每页条数 |
+| `keyword` | String | | — | 搜索关键词 |
+| `role` | String | | — | 角色筛选，如 `ROLE_ADMIN` |
+| `status` | Integer | | — | 状态筛选 |
+
+### 4.2 用户详情
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users/{id}` |
+| **请求方式** | `GET` |
+
+### 4.3 新增用户
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users` |
+| **请求方式** | `POST` |
+
+```json
+{
+  "username": "newuser",
+  "password": "123456",
+  "email": "new@example.com",
+  "phone": "13800000000",
+  "nickname": "新用户",
+  "roleCodes": ["ROLE_INTERVIEWER"]
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `username` | String | ✅ | 用户名 |
+| `password` | String | ✅ | 密码 |
+| `roleCodes` | Array | | 角色编码列表，不传默认 `ROLE_USER` |
+
+### 4.4 编辑用户
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users/{id}` |
+| **请求方式** | `PUT` |
+
+```json
+{ "nickname": "新昵称", "email": "x@x.com", "phone": "139", "status": 1 }
+```
+
+所有字段可选。**不能修改密码**，密码通过单独接口重置。
+
+### 4.5 重置密码
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users/{id}/password` |
+| **请求方式** | `PUT` |
+
+```json
+{ "newPassword": "新密码" }
+```
+
+管理员无需旧密码即可重置用户密码。
+
+### 4.6 删除用户
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users/{id}` |
+| **请求方式** | `DELETE` |
+
+逻辑删除。
+
+### 4.7 分配角色
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/users/{id}/roles` |
+| **请求方式** | `PUT` |
+
+```json
+{ "roleCodes": ["ROLE_ADMIN", "ROLE_INTERVIEWER"] }
+```
+
+先删后增，全量替换。
+
+---
+
+## 5. 角色管理（管理员）
+
+### 5.1 角色列表
+
+| GET | `/api/admin/roles` | 全量列表，按 sort 排序 |
+
+### 5.2 角色详情
+
+| GET | `/api/admin/roles/{id}` |
+
+### 5.3 新增角色
+
+| POST | `/api/admin/roles` |
+
+```json
+{ "roleCode": "ROLE_HR", "roleName": "HR", "description": "人事", "sort": 5 }
+```
+
+### 5.4 编辑角色
+
+| PUT | `/api/admin/roles/{id}` |
+
+```json
+{ "roleName": "人力资源", "sort": 3 }
+```
+
+### 5.5 删除角色
+
+| DELETE | `/api/admin/roles/{id}` |
+
+> 兼容接口：现在等价于关闭角色（`deleted=1`），不是物理删除。
+>
+> 新增状态接口：`PUT /api/admin/roles/{id}/enabled?enabled=true|false`，`true` 启用角色，`false` 关闭角色。成功响应 `data` 为更新后的 `Role`。
+>
+> `GET /api/admin/roles` 和 `GET /api/admin/roles/{id}` 会返回启用和关闭角色，响应字段包含 `deleted`：`0`/`null` 表示启用，`1` 表示关闭。
+
+### 5.6 查询角色权限
+
+| GET | `/api/admin/roles/{id}/permissions` |
+
+返回 `["user:list", "user:view"]`。
+
+### 5.7 分配权限
+
+| PUT | `/api/admin/roles/{id}/permissions` |
+
+```json
+{ "permCodes": ["user:list", "user:create", "user:edit", "user:delete"] }
+```
+
+先删后增。
+
+---
+
+## 6. 权限管理（管理员）
+
+### 6.1 权限列表
+
+| GET | `/api/admin/permissions` |
+
+### 6.2 权限详情
+
+| GET | `/api/admin/permissions/{id}` |
+
+### 6.3 新增权限
+
+| POST | `/api/admin/permissions` |
+
+```json
+{ "permCode": "interview:review", "permName": "评阅面试", "description": "评分批注" }
+```
+
+### 6.4 编辑权限
+
+| PUT | `/api/admin/permissions/{id}` |
+
+```json
+{ "permName": "面试评阅" }
+```
+
+### 6.5 删除权限
+
+| DELETE | `/api/admin/permissions/{id}` |
+
+> 兼容接口：现在等价于关闭权限（`deleted=1`），不是物理删除。
+>
+> 新增状态接口：`PUT /api/admin/permissions/{id}/enabled?enabled=true|false`，`true` 启用权限，`false` 关闭权限。成功响应 `data` 为更新后的 `Permission`。
+>
+> `GET /api/admin/permissions` 和 `GET /api/admin/permissions/{id}` 会返回启用和关闭权限，响应字段包含 `deleted`：`0`/`null` 表示启用，`1` 表示关闭。
+
+---
+
+## 7. 操作日志管理（管理员）
+
+> **认证要求**：需携带 Token，且用户具有 `ROLE_ADMIN` 角色和 `log:list` 权限。
+
+### 7.1 日志列表
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/logs` |
+| **请求方式** | `GET` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:---:|--------|------|
+| `page` | int | | 1 | 页码 |
+| `size` | int | | 10 | 每页条数 |
+| `username` | String | | — | 操作人用户名筛选 |
+| `module` | String | | — | 模块筛选，如"用户管理" |
+| `status` | Integer | | — | 操作结果：1=成功 0=失败 |
+| `startDate` | String | | — | 开始日期，如 `2026-07-01` |
+| `endDate` | String | | — | 结束日期 |
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "total": 52,
+    "list": [
+      {
+        "id": 1,
+        "userId": 1,
+        "username": "admin",
+        "module": "用户管理",
+        "operation": "删除用户",
+        "description": "删除了用户zhangsan(ID:3)",
+        "method": "DELETE",
+        "requestUri": "/api/admin/users/3",
+        "classMethod": "com.yimian.system.controller.admin.AdminUserController.deleteUser",
+        "requestParams": "{\"id\":3}",
+        "ip": "192.168.1.100",
+        "userAgent": "Mozilla/5.0 ...",
+        "responseCode": 200,
+        "resultCode": 200,
+        "resultMsg": "操作成功",
+        "errorMsg": null,
+        "duration": 245,
+        "status": 1,
+        "createdAt": "2026-07-12 15:30:00"
+      }
+    ],
+    "pageNum": 1,
+    "pageSize": 10
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 日志 ID |
+| `userId` | Long | 操作人 ID |
+| `username` | String | 操作人用户名 |
+| `module` | String | 模块名称 |
+| `operation` | String | 操作类型 |
+| `description` | String | 操作描述（含具体数据） |
+| `method` | String | HTTP 方法 |
+| `requestUri` | String | 请求路径 |
+| `classMethod` | String | 全限定方法名 |
+| `requestParams` | String | 请求参数 JSON（敏感字段已脱敏） |
+| `ip` | String | 客户端 IP |
+| `userAgent` | String | User-Agent |
+| `responseCode` | Integer | HTTP 状态码 |
+| `resultCode` | Integer | 业务码 |
+| `resultMsg` | String | 业务消息 |
+| `errorMsg` | String | 异常信息 |
+| `duration` | Long | 执行耗时（毫秒） |
+| `status` | Integer | 1=成功 0=失败 |
+| `createdAt` | String | 日志创建时间 |
+
+> 注意：日志只追加不修改不删除，表中无 `deleted` 字段。
+
+---
+
+## 8. 日志模块字典管理（管理员）
+
+> **接口前缀**：`/api/admin/logs/modules`
+> **认证要求**：需携带 Token，且具有 `ROLE_ADMIN` 角色。
+
+### 8.1 启用的模块列表（下拉框用）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/admin/logs/modules/enabled` |
+| **请求方式** | `GET` |
+| **认证要求** | 需认证（无需额外权限） |
+
+返回 `enabled=1` 的模块，按 `sort` 排序。
+
+### 8.2 全量模块列表（管理用）
+
+| GET | `/api/admin/logs/modules` | 需 `log:module:list` |
+
+### 8.3 模块详情
+
+| GET | `/api/admin/logs/modules/{id}` | 需 `log:module:list` |
+
+### 8.4 新增模块
+
+| POST | `/api/admin/logs/modules` | 需 `log:module:edit` |
+
+```json
+{ "code": "USER", "name": "用户管理", "description": "用户CRUD", "sort": 1, "enabled": 1 }
+```
+
+### 8.5 编辑模块
+
+| PUT | `/api/admin/logs/modules/{id}` | 需 `log:module:edit` |
+
+```json
+{ "name": "账号管理", "sort": 2 }
+```
+
+### 8.6 删除模块
+
+| DELETE | `/api/admin/logs/modules/{id}` | 需 `log:module:edit` |
+
+物理删除。
+
+> **工作原理**：
+> 1. `@OperationLog(module="USER", operation="新增用户")` 注解传编码
+> 2. AOP 把编码写入 `sys_operation_log.module`
+> 3. 查询日志列表时，从 `LogModuleCache`（内存）翻译编码为 `moduleName` 返回前端
+> 4. 应用启动时自动扫描所有 `@OperationLog` 注解，把新编码 upsert 到 `sys_log_module`
+
+---
+
+## 9. 文件上传（通用工具）
+
+> 通用文件上传模块，按业务场景分目录存储到服务器 `oss/` 文件夹。
+> 工具接口不做文件类型判断，由各业务接口自行限制允许的后缀和大小。
+
+### 9.1 上传文件
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/file/upload` |
+| **请求方式** | `POST` |
+| **认证要求** | 需携带 Token |
+| **Content-Type** | `multipart/form-data` |
+
+**表单参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `file` | File | ✅ | 上传的文件 |
+| `scene` | String | | 业务场景，作为一级子目录，默认 `common`。只允许字母/数字/下划线/中划线 |
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "originalName": "头像.jpg",
+    "fileName": "a1b2c3d4e5f6.jpg",
+    "path": "avatar/2026/07/13/a1b2c3d4e5f6.jpg",
+    "url": "/api/file/avatar/2026/07/13/a1b2c3d4e5f6.jpg",
+    "size": 102400,
+    "contentType": "image/jpeg",
+    "extension": "jpg"
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `originalName` | String | 原始文件名 |
+| `fileName` | String | 存储文件名（uuid + 扩展名） |
+| `path` | String | 相对存储路径 |
+| `url` | String | 完整访问 URL，前端可直接用于展示 |
+| `size` | Long | 文件大小（字节） |
+| `contentType` | String | MIME 类型 |
+| `extension` | String | 扩展名（不含点） |
+
+**存储路径规则**：`oss/{scene}/{yyyy/MM/dd}/{uuid}.{ext}`
+
+**失败响应**：
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1100 | 上传文件不能为空 | file 为空 |
+| 1101 | 文件保存失败 | 磁盘写入异常或超限 |
+| 1103 | 非法的文件路径 | scene 含非法字符 |
+
+### 9.2 读取文件
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/file/{scene}/{yyyy}/{MM}/{dd}/{file}` |
+| **请求方式** | `GET` |
+| **认证要求** | 公开访问，无需 Token |
+
+流式返回文件内容，`Content-Disposition: inline`，前端可直接作为 `<img src>` / `<a href>` 使用。
+
+**失败响应**：
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1102 | 文件不存在 | 路径对应的文件不存在 |
+| 1103 | 非法的文件路径 | 含 `../` 等穿越尝试 |
+
+---
+
+## 10. 错误码汇总
+
+| code | 说明 |
+|------|------|
+| 200 | 成功 |
+| 400 | 参数校验失败 |
+| 401 | 未登录 |
+| 403 | 无权限 |
+| 1001 | 用户名已存在 |
+| 1002 | 邮箱已被注册 |
+| 1003 | 用户不存在 |
+| 1004 | 密码错误 |
+| 1005 | 账号已被禁用 |
+| 1010 | 角色编码已存在 |
+| 1011 | 角色不存在 |
+| 1020 | 权限编码已存在 |
+| 1021 | 权限不存在 |
+| 1030 | 模块编码已存在 |
+| 1100 | 上传文件不能为空 |
+| 1101 | 文件保存失败 |
+| 1102 | 文件不存在 |
+| 1103 | 非法的文件路径 |
+| 1104 | 文件读取失败 |
+| 1201 | 内容已存在，请勿重复上传 |
+| 1202 | 知识题目不存在 |
+| 1203 | 题目状态不允许此操作 |
+| 1301 | 标签不存在 |
+| 1302 | 标签名称已存在 |
+| 1401 | 收藏夹不存在 |
+| 1402 | 无权操作该收藏夹 |
+| 1403 | 该题目已收藏到此收藏夹 |
+| 1404 | 收藏条目不存在 |
+| 1405 | 该收藏夹未公开 |
+
+---
+
+## 11. 知识题目管理
+
+> **接口前缀**：`/api/knowledge`
+> **认证要求**：需携带 Token
+
+### 11.1 题目列表（分页）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge` |
+| **请求方式** | `GET` |
+| **认证要求** | 需携带 Token |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:---:|--------|------|
+| `page` | int | | 1 | 页码 |
+| `size` | int | | 10 | 每页条数 |
+| `keyword` | String | | — | 关键词搜索（标题/内容） |
+| `difficulty` | Integer | | — | 难度：1=简单 2=中等 3=困难 |
+| `tagId` | Long | | — | 标签 ID 筛选 |
+| `status` | Integer | | — | 状态筛选（管理员用） |
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "total": 12,
+    "list": [{
+      "id": 1,
+      "title": "HashMap底层原理与扩容机制",
+      "content": "## 核心概念\n\nHashMap...",
+      "difficulty": 2,
+      "status": 1,
+      "auditRemark": null,
+      "auditUserId": null,
+      "auditTime": null,
+      "submitUserId": 2,
+      "submitUserName": "zhangsan",
+      "viewCount": 10,
+      "likeCount": 0,
+      "collectCount": 0,
+      "commentCount": 0,
+      "tags": [{ "id": 1, "name": "Java", "color": "#e74c3c" }],
+      "createdAt": "2026-07-14T15:32:37",
+      "updatedAt": "2026-07-14T15:32:58"
+    }],
+    "pageNum": 1,
+    "pageSize": 10
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.total` | Long | 总条数 |
+| `data.list` | Array | 题目列表 |
+| `data.list[].id` | Long | 题目 ID |
+| `data.list[].title` | String | 标题 |
+| `data.list[].content` | String | 正文（Markdown 原文） |
+| `data.list[].difficulty` | Integer | 难度：1/2/3 |
+| `data.list[].status` | Integer | 状态：0=待审核 1=通过 2=拒绝 3=草稿 |
+| `data.list[].auditRemark` | String | 审核意见（拒绝时填写） |
+| `data.list[].auditUserId` | Long | 审核人 ID |
+| `data.list[].auditTime` | String | 审核时间 |
+| `data.list[].submitUserId` | Long | 提交人 ID |
+| `data.list[].submitUserName` | String | 提交人显示名，优先昵称，其次用户名；用户记录缺失时为 `用户#{id}` |
+| `data.list[].viewCount` | Integer | 浏览次数 |
+| `data.list[].likeCount` | Integer | 点赞数 |
+| `data.list[].collectCount` | Integer | 收藏次数 |
+| `data.list[].commentCount` | Integer | 评论数 |
+| `data.list[].tags` | Array | 关联标签列表 |
+| `data.pageNum` | Integer | 当前页码 |
+| `data.pageSize` | Integer | 每页条数 |
+
+> 注意：列表按 `created_at DESC` 排序。用户端默认不传 `status`，展示所有题目。
+
+### 11.2 题目详情
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/{id}` |
+| **请求方式** | `GET` |
+| **认证要求** | 需携带 Token |
+
+返回结构同列表项，包含完整 `content`（Markdown 原文）。每次调用自动增加 1 次浏览次数。
+
+**失败响应**：
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1202 | 知识题目不存在 | id 无效或已被删除 |
+
+### 11.3 热门题目
+
+> 热点存储使用 Redis：浏览、收藏等行为会写入 Redis 计数与排行榜；当 Redis 无数据或不可用时，接口自动使用 MySQL 的 `viewCount/likeCount/collectCount/commentCount` 加时间衰减进行兜底排序。
+
+| 接口 | 方法 | 地址 | 说明 |
+|------|------|------|------|
+| 今日热门 | GET | `/api/knowledge/hot/today?limit=10` | 查询今日热门题目 |
+| 本周热门 | GET | `/api/knowledge/hot/weekly?limit=10` | 查询本周热门题目 |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:---:|--------|------|
+| `limit` | Integer | | 10 | 返回条数，最大 50 |
+
+**成功响应**：
+
+`data` 为 `KnowledgeVO[]`，字段同题目列表项。
+
+**热度规则**：
+
+```text
+hotScore = (viewCount*1 + likeCount*3 + collectCount*5 + commentCount*2) * timeDecay
+timeDecay = 1 / (1 + days_since_publish * 0.1)
+```
+
+当前已接入行为：题目详情浏览、收藏题目。点赞、评论模块实现后调用 `HotDataService.incrLike/incrComment` 接入。
+
+### 11.4 提交题目
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/submit` |
+| **请求方式** | `POST` |
+| **认证要求** | 需携带 Token |
+
+**Request Body**：
+
+```json
+{
+  "title": "HashMap底层原理",
+  "content": "## 核心概念\n...",
+  "difficulty": 2,
+  "tagIds": [1, 2]
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `title` | String | ✅ | 标题，最长 200 字 |
+| `content` | String | ✅ | 正文（Markdown 原文） |
+| `difficulty` | Integer | | 难度：1=简单 2=中等 3=困难，默认 1 |
+| `tagIds` | Array | | 标签 ID 列表 |
+
+**业务规则**：受 `audit.enabled` 开关控制。
+- 开关关闭时：status 直接设为 1（审核通过）
+- 开关开启时：status 设为 0（待审核）
+- SHA-256 去重：内容已存在时返回 1201
+
+### 11.5 直接上传（跳过审核）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/direct` |
+| **请求方式** | `POST` |
+| **权限要求** | `knowledge:direct-upload` |
+
+请求体同 `/submit`，但跳过审核开关，直接 status=1。
+
+### 11.6 我的题目列表
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/my` |
+| **请求方式** | `GET` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:---:|--------|------|
+| `page` | int | | 1 | 页码 |
+| `size` | int | | 10 | 每页条数 |
+| `status` | Integer | | — | 状态筛选：0=待审核 1=通过 2=拒绝 3=草稿 |
+
+### 11.7 编辑题目
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/{id}` |
+| **请求方式** | `PUT` |
+
+```json
+{
+  "title": "新标题",
+  "content": "新内容",
+  "difficulty": 1,
+  "tagIds": [1, 3]
+}
+```
+
+所有字段可选。仅允许编辑自己的题目且状态为草稿(3)或拒绝(2)。
+
+### 11.8 删除题目
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/knowledge/{id}` |
+| **请求方式** | `DELETE` |
+
+软删除，仅允许删除自己的题目。
+
+### 11.9 审核管理（管理员）
+
+> **权限要求**：`knowledge:audit`
+
+| 接口 | 方法 | 地址 | 说明 |
+|------|------|------|------|
+| 待审核列表 | GET | `/api/admin/knowledge/pending?page=1&size=10&keyword=xxx` | 查询 status=0 的题目，支持关键词筛选 |
+| 审核通过 | PUT | `/api/admin/knowledge/{id}/approve` | 设置 status=1，记录审核人 ID 和审核时间 |
+| 审核拒绝 | PUT | `/api/admin/knowledge/{id}/reject?remark=原因` | 设置 status=2，需填写拒绝原因，记录审核人 ID 和审核时间 |
+| 批量审核 | PUT | `/api/admin/knowledge/batch-audit` | 请求体：`{"ids":[1,2,3],"approve":true,"remark":""}` |
+| 审核开关查询 | GET | `/api/knowledge/audit-switch` | 需 `knowledge:audit` |
+| 审核开关设置 | PUT | `/api/knowledge/audit-switch?enabled=true` | 需 `knowledge:audit`，运行时生效，重启恢复 |
+
+**审核通过/拒绝成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": 1,
+    "title": "HashMap底层原理",
+    "content": "## 核心概念\n...",
+    "difficulty": 2,
+    "status": 1,
+    "auditRemark": null,
+    "auditUserId": 1,
+    "auditTime": "2026-07-14T16:00:00",
+    "submitUserId": 2,
+    "viewCount": 0,
+    "likeCount": 0,
+    "collectCount": 0,
+    "commentCount": 0,
+    "tags": [{ "id": 1, "name": "Java", "color": "#e74c3c" }],
+    "createdAt": "2026-07-14T15:32:37",
+    "updatedAt": "2026-07-14T16:00:00"
+  },
+  "timestamp": 1720771200000
+}
+```
+
+| 新增字段 | 类型 | 说明 |
+|------|------|------|
+| `auditUserId` | Long | 审核人 ID（通过/拒绝时记录） |
+| `auditTime` | String | 审核时间（通过/拒绝时记录） |
+
+**失败响应**：
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1202 | 知识题目不存在 | id 无效或已被删除 |
+| 1203 | 题目状态不允许此操作 | 题目非待审核状态（status ≠ 0） |
+| 403 | 无权限访问 | 缺少 `knowledge:audit` 权限 |
+
+---
+
+## 12. 标签管理
+
+> **接口前缀**：`/api/tags`（公开）/ `/api/admin/tags`（管理员）
+
+### 12.1 标签列表（公开）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/tags` |
+| **请求方式** | `GET` |
+| **认证要求** | 需携带 Token |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `keyword` | String | | 关键词搜索标签名称 |
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": [{
+    "id": 1,
+    "name": "Java",
+    "color": "#e74c3c",
+    "sort": 1,
+    "usageCount": 38,
+    "createdAt": "2026-07-14T10:00:00",
+    "updatedAt": "2026-07-14T10:00:00"
+  }],
+  "timestamp": 1720771200000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 标签 ID |
+| `name` | String | 标签名称 |
+| `color` | String | 颜色代码（如 `#e74c3c`） |
+| `sort` | Integer | 排序号 |
+| `usageCount` | Integer | 关联知识数量 |
+
+### 12.2 管理员标签 CRUD
+
+> **权限要求**：`knowledge:audit`
+
+| 接口 | 方法 | 地址 | 说明 |
+|------|------|------|------|
+| 新增标签 | POST | `/api/admin/tags` | 请求体：`{"name":"Go","color":"#00ADD8","sort":27}` |
+| 编辑标签 | PUT | `/api/admin/tags/{id}` | 请求体同新增，字段可选 |
+| 删除标签 | DELETE | `/api/admin/tags/{id}` | 同时删除关联表数据 |
+
+**失败响应**：
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1301 | 标签不存在 | id 无效 |
+| 1302 | 标签名称已存在 | name 重复 |
+
+---
+
+## 13. 收藏夹管理
+
+> **接口前缀**：`/api/favorites`
+> **认证要求**：需携带 Token
+> **权限脚本**：`system/sql/16-favorite-permissions.sql`
+
+### 13.1 创建收藏夹
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/favorites/folders` |
+| **请求方式** | `POST` |
+| **权限要求** | `favorite:create` |
+
+**Request Body**：
+```json
+{
+  "name": "Java 高频题",
+  "description": "整理 Java 面试常见问题",
+  "isPublic": 0,
+  "coverImage": null
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `name` | String | ✅ | 收藏夹名称，最长 100 |
+| `description` | String | | 描述，最长 500 |
+| `isPublic` | Integer | | 是否公开：0=私有 1=公开，默认 0 |
+| `coverImage` | String | | 封面图 URL，最长 500 |
+
+**成功响应 `data` 字段**：`FavoriteFolderVO`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 收藏夹雪花 ID |
+| `name` | String | 收藏夹名称 |
+| `description` | String | 描述 |
+| `userId` | Long | 所属用户 ID |
+| `isPublic` | Integer | 是否公开：0=私有 1=公开 |
+| `coverImage` | String | 封面图 URL |
+| `itemCount` | Integer | 收藏条目数 |
+| `viewCount` | Integer | 浏览次数 |
+| `createdAt` | String | 创建时间 |
+| `updatedAt` | String | 更新时间 |
+
+### 13.2 编辑 / 删除收藏夹
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 编辑收藏夹 | PUT | `/api/favorites/folders/{id}` | `favorite:edit` | 请求体同创建，字段可选，仅允许操作自己的收藏夹 |
+| 删除收藏夹 | DELETE | `/api/favorites/folders/{id}` | `favorite:delete` | 软删除自己的收藏夹，并同步移除收藏条目 |
+
+### 13.3 收藏 / 取消收藏题目
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 收藏题目 | POST | `/api/favorites/folders/{folderId}/items` | `favorite:item:add` | 将审核通过的知识题目加入自己的收藏夹 |
+| 条目列表/搜索 | GET | `/api/favorites/folders/{folderId}/items?page=1&size=10&keyword=java` | `favorite:view` | 分页查询当前收藏夹内收藏题目，支持标题搜索 |
+| 取消收藏 | DELETE | `/api/favorites/folders/{folderId}/items/{itemId}` | `favorite:item:delete` | 从自己的收藏夹移除条目 |
+
+**收藏题目 Request Body**：
+```json
+{
+  "knowledgeId": 1
+}
+```
+
+**收藏成功响应 `data` 字段**：`FavoriteItemVO`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 收藏条目 ID |
+| `folderId` | Long | 收藏夹 ID |
+| `knowledgeId` | Long | 知识题目 ID |
+| `sort` | Integer | 排序号 |
+| `knowledge` | Object | 知识题目 VO，字段同 `KnowledgeVO` |
+| `createdAt` | String | 收藏时间 |
+| `updatedAt` | String | 更新时间 |
+
+**条目列表/搜索成功响应**：
+
+`data` 对齐 `PageInfo<FavoriteItemVO>`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.list` | Array | 收藏条目列表 |
+| `data.total` | Long | 总条数 |
+| `data.pageNum` | Integer | 当前页码 |
+| `data.pageSize` | Integer | 每页条数 |
+
+### 13.4 收藏夹列表
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 用户公开收藏夹 | GET | `/api/favorites/folders?userId=1` | `favorite:list` | 查看指定用户公开收藏夹 |
+| 我的收藏夹 | GET | `/api/favorites/my-folders` | `favorite:list` | 查看当前用户全部收藏夹，包含私有 |
+
+响应 `data` 为 `FavoriteFolderVO[]`。
+
+### 13.5 收藏夹详情
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/favorites/folders/{id}` |
+| **请求方式** | `GET` |
+| **权限要求** | `favorite:view` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | | 1 | 条目页码 |
+| `size` | Integer | | 10 | 每页条数 |
+| `keyword` | String | | - | 搜索当前收藏夹内题目标题 |
+
+**成功响应 `data` 字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id/name/description/userId/isPublic/coverImage/itemCount/viewCount/createdAt/updatedAt` | - | 同 `FavoriteFolderVO` |
+| `items.list` | Array | 收藏条目列表 |
+| `items.total` | Long | 总条数 |
+| `items.pageNum` | Integer | 当前页码 |
+| `items.pageSize` | Integer | 每页条数 |
+
+> 可见性：收藏夹所有者可查看自己的私有/公开收藏夹，其他用户只能查看公开收藏夹。详情接口会增加 `viewCount`，Redis 热度计数后续接入热点模块。
+
+### 13.6 是否已收藏检查
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/favorites/check?knowledgeId=1` |
+| **请求方式** | `GET` |
+| **权限要求** | `favorite:view` |
+
+**成功响应 `data` 字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `collected` | Boolean | 当前用户是否已收藏该题目 |
+| `folders` | Array | 已收藏该题目的收藏夹列表 |
+
+### 13.7 失败响应
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1202 | 知识题目不存在 | knowledgeId 无效、已删除或未审核通过 |
+| 1401 | 收藏夹不存在 | folderId/id 无效或已删除 |
+| 1402 | 无权操作该收藏夹 | 编辑、删除、增删条目时不是收藏夹所有者 |
+| 1403 | 该题目已收藏到此收藏夹 | 同一收藏夹重复收藏同一题目 |
+| 1404 | 收藏条目不存在 | itemId 无效或不属于该收藏夹 |
+| 1405 | 该收藏夹未公开 | 非所有者查看私有收藏夹 |
+| 403 | 无权限访问 | 缺少对应 `favorite:*` 权限 |
+
+---
+
+## 14. 博客讨论
+
+> **接口前缀**：`/api/blogs`
+> **认证要求**：需携带 Token
+> **权限脚本**：`system/sql/18-blog-permissions.sql`、`system/sql/19-init-topic.sql`、`system/sql/20-blog-images.sql`、`system/sql/23-blog-topic-category.sql`
+
+### 14.1 博客列表
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/blogs` |
+| **请求方式** | `GET` |
+| **权限要求** | `blog:list` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | | 1 | 页码 |
+| `size` | Integer | | 10 | 每页条数，最大 50 |
+| `keyword` | String | | - | 搜索标题、摘要、正文、话题名 |
+| `sort` | String | | `newest` | `newest` / `hot` |
+| `refType` | String | | - | `knowledge` / `folder` |
+
+成功响应 `data` 对齐 `PageInfo<BlogVO>`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+
+### 14.2 发布博客 / 保存草稿
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/blogs` |
+| **请求方式** | `POST` |
+| **权限要求** | `blog:create` |
+
+**Request Body**：
+
+```json
+{
+  "title": "一次 Redis 缓存击穿排查复盘",
+  "content": "## 背景\n...",
+  "summary": "可选摘要，不填自动截取正文",
+  "images": ["/api/file/blog/xxx.jpg", "/api/file/blog/yyy.jpg"],
+  "status": 1,
+  "refType": "knowledge",
+  "refId": 1,
+  "topicIds": [6, 14]
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `title` | String | ✅ | 标题，最长 200 |
+| `content` | String | ✅ | Markdown 正文 |
+| `summary` | String | | 摘要，最长 500，不填自动生成 |
+| `images` | Array | | 博客配图 URL 列表，至多 9 张 |
+| `status` | Integer | | 0=草稿，1=发布，默认 1 |
+| `refType` | String | | `knowledge` / `folder`，不传表示不关联 |
+| `refId` | Long | | 关联对象 ID |
+| `topicIds` | Array | | 话题 ID 列表，最多 8 个 |
+
+> 关联校验：`knowledge` 必须是已审核通过题目；`folder` 必须是**自己公开的**收藏夹。
+
+### 14.3 编辑 / 删除 / 我的博客
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 编辑博客 | PUT | `/api/blogs/{id}` | `blog:edit` | 请求体同发布，字段可选，仅作者可编辑 |
+| 删除博客 | DELETE | `/api/blogs/{id}` | `blog:delete` | 软删除，同时删除图片和话题关联，仅作者可删除 |
+| 我的博客 | GET | `/api/blogs/my?page=1&size=10&status=0` | `blog:list` | 查询当前用户博客，`status` 可选 |
+
+### 14.4 管理员博客管理
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 后台博客列表 | GET | `/api/admin/blogs?page=1&size=10&keyword=&status=` | `ROLE_ADMIN` + `blog:list` | 查询未删除博客，`status` 可选：0=草稿、1=已发布、2=审核中、3=已屏蔽 |
+| 更新博客状态 | PUT | `/api/admin/blogs/{id}/status?status=1` | `ROLE_ADMIN` + `blog:edit` | 管理员更新博客状态；改为已发布时会补齐 `publishedAt` |
+| 后台删除博客 | DELETE | `/api/admin/blogs/{id}` | `ROLE_ADMIN` + `blog:delete` | 软删除博客，并清理图片和话题关联 |
+
+列表成功响应 `data` 对齐 `PageInfo<BlogVO>`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+
+### 14.5 博客详情
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/blogs/{id}` |
+| **请求方式** | `GET` |
+| **权限要求** | `blog:view` |
+
+返回 `BlogVO`，包含作者信息、关联对象摘要和完整 Markdown 正文。新建博客的 `id` 为雪花 ID。已发布博客每次访问会增加 `viewCount`；草稿仅作者可见。
+
+**BlogVO 字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id/title/content/summary` | - | 博客基础内容，其中 `id` 为博客雪花 ID |
+| `authorId/authorName/authorAvatar` | - | 作者信息 |
+| `status` | Integer | 0=草稿 1=已发布 2=审核中 3=已屏蔽 |
+| `isPinned` | Integer | 是否置顶 |
+| `viewCount/likeCount/commentCount` | Integer | 统计字段 |
+| `refType/refId/ref` | - | 关联对象信息，`ref` 含 `type/id/title/description/coverImage` |
+| `images` | Array | 博客配图 URL 列表，按 sort 升序 |
+| `topics` | Array | 关联话题列表，每个元素含 `id/name/color` |
+| `publishedAt/createdAt/updatedAt` | String | 时间字段 |
+
+### 14.6 失败响应
+
+| code | message | 触发场景 |
+|------|------|------|
+| 1501 | 博客不存在 | id 无效或已删除 |
+| 1502 | 无权操作该博客 | 编辑/删除非本人博客，或查看他人草稿 |
+| 1503 | 博客关联对象不存在或不可见 | refType/refId 无效 |
+| 403 | 无权限访问 | 缺少对应 `blog:*` 权限 |
+
+---
+
+## 15. 话题模块
+
+> **接口前缀**：`/api/topics`
+> **权限脚本**：`system/sql/19-init-topic.sql`、`system/sql/23-blog-topic-category.sql`
+
+### 15.1 话题列表（公开）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/topics` |
+| **请求方式** | `GET` |
+| **认证要求** | 无需认证 |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `keyword` | String | | 搜索话题名称 |
+
+**成功响应**：
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "id": 1,
+      "name": "Java 基础",
+      "description": "Java 语言核心概念与基础语法",
+      "color": "#e74c3c",
+      "sort": 1,
+      "blogCount": 12,
+      "createdAt": "2026-07-15T10:00:00",
+      "updatedAt": "2026-07-15T10:00:00"
+    }
+  ]
+}
+```
+
+### 15.2 话题管理（管理员）
+
+| 接口 | 方法 | 地址 | 权限 | 说明 |
+|------|------|------|------|------|
+| 新增话题 | POST | `/api/admin/topics?name=&description=&color=` | `topic:create` | name 必填，最长 50 |
+| 编辑话题 | PUT | `/api/admin/topics/{id}` | `topic:edit` | 参数同新增，额外支持 `sort` |
+| 删除话题 | DELETE | `/api/admin/topics/{id}` | `topic:delete` | 软删除 |
+
+> 前端已新增博客图片上传、话题选择、收藏夹公开过滤等功能。
+
+---
+
+## 16. 收藏夹支持博客补充
+
+> 相关 SQL：`system/sql/24-favorite-blog-item.sql`
+
+收藏夹条目已从“仅题目”扩展为“内容条目”，支持题目和博客两类：
+
+```json
+{
+  "itemType": "knowledge",
+  "targetId": 1
+}
+```
+
+兼容旧题目收藏请求：
+
+```json
+{
+  "knowledgeId": 1
+}
+```
+
+收藏博客请求：
+
+```json
+{
+  "itemType": "blog",
+  "targetId": 1,
+  "blogId": 1
+}
+```
+
+`FavoriteItemVO` 新增/支持字段：`itemType`、`targetId`、`knowledgeId`、`blogId`、`knowledge`、`blog`。收藏夹条目列表 `data.list` 中，`itemType=knowledge` 时读取 `knowledge`，`itemType=blog` 时读取 `blog`。
+
+博客详情收藏接口 `POST /api/blogs/{id}/collect?folderId=1` 会继续写入 `sys_blog_collect`，同时同步创建 `sys_favorite_item(itemType='blog')`，因此收藏夹详情页可以直接展示已收藏博客。
+
+---
+
+## 17. 评论模块
+
+> 接口前缀：`/api/comments`
+> 认证要求：需携带 Token
+> 权限脚本：`system/sql/25-comment-system.sql`
+
+评论支持题目和博客两类目标，支持评论点赞、回复评论。列表默认按热点排序，也可切换为最新评论。
+
+### 17.1 评论列表
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/comments` |
+| 请求方式 | `GET` |
+| 权限要求 | `comment:view` |
+
+Query 参数：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `targetType` | String | 是 | - | `knowledge` / `blog` |
+| `targetId` | Long | 是 | - | 目标 ID |
+| `page` | Integer | 否 | 1 | 主评论页码 |
+| `size` | Integer | 否 | 20 | 每页主评论数，最大 50 |
+| `sort` | String | 否 | `hot` | `hot` / `newest` |
+
+响应 `data` 对齐 `PageInfo<CommentVO>`，`data.list` 为主评论列表，每条主评论的 `replies` 包含其回复。
+
+`CommentVO` 字段：`id`、`targetType`、`targetId`、`parentId`、`replyToCommentId`、`replyToUserId`、`replyToNickname`、`authorId`、`authorNickname`、`authorAvatar`、`content`、`likeCount`、`replyCount`、`liked`、`createdAt`、`updatedAt`、`replies`。
+
+热点排序规则：主评论按 `likeCount * 3 + replyCount * 2` 倒序，再按创建时间倒序。
+
+### 17.2 发表评论 / 回复
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/comments` |
+| 请求方式 | `POST` |
+| 权限要求 | `comment:create` |
+
+发表评论：
+
+```json
+{
+  "targetType": "blog",
+  "targetId": 1,
+  "content": "写得很清楚"
+}
+```
+
+回复评论：
+
+```json
+{
+  "targetType": "blog",
+  "targetId": 1,
+  "content": "我也这么理解",
+  "parentId": 10,
+  "replyToCommentId": 12,
+  "replyToUserId": 3
+}
+```
+
+创建成功后会同步更新目标 `commentCount`；题目评论还会写入热点统计。
+
+### 17.3 评论点赞 / 取消点赞
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/comments/{id}/like` |
+| 请求方式 | `POST` |
+| 权限要求 | `comment:like` |
+
+该接口为 toggle：未点赞时点赞，已点赞时取消点赞。
+
+响应 `data`：
+
+```json
+{
+  "likeCount": 12,
+  "liked": true
+}
+```
+
+
+---
+
+## 18. 消息通知模块
+
+> 接口前缀：/api/notifications

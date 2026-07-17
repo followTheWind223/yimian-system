@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.UserMapper">
+
+    <!-- 基础字段列表 -->
+    <sql id="Base_Column_List">
+        id, username, password, email, phone, nickname, avatar, status,
+        created_at, updated_at, last_login_time, last_login_ip
+    </sql>
+
+    <!-- 逻辑删除条件：兼容 deleted 为 NULL 的情况 -->
+    <sql id="Not_Deleted">
+        (deleted IS NULL OR deleted = 0)
+    </sql>
+
+    <!-- 根据用户名查询 -->
+    <select id="selectByUsername" resultType="com.yimian.system.entity.User">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_user
+        WHERE username = #{username}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <!-- 根据邮箱查询 -->
+    <select id="selectByEmail" resultType="com.yimian.system.entity.User">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_user
+        WHERE email = #{email}
+          AND <include refid="Not_Deleted"/>
+    </select>
+
+    <!-- 查询用户列表（配合 PageHelper.startPage 实现分页） -->
+    <select id="selectUserPage" resultType="com.yimian.system.entity.User">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_user u
+        WHERE <include refid="Not_Deleted"/>
+        <if test="keyword != null and keyword != ''">
+            AND (username LIKE CONCAT('%', #{keyword}, '%')
+                 OR email LIKE CONCAT('%', #{keyword}, '%')
+                 OR nickname LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="role != null and role != ''">
+            AND u.id IN (
+                SELECT ur.user_id FROM sys_user_role ur
+                INNER JOIN sys_role r ON ur.role_id = r.id
+                WHERE r.role_code = #{role}
+                  AND (r.deleted IS NULL OR r.deleted = 0)
+            )
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 查询用户的角色编码列表 -->
+    <select id="selectRoleCodesByUserId" resultType="String">
+        SELECT r.role_code
+        FROM sys_role r
+        INNER JOIN sys_user_role ur ON r.id = ur.role_id
+        WHERE ur.user_id = #{userId}
+          AND (r.deleted IS NULL OR r.deleted = 0)
+    </select>
+
+    <!-- 为用户分配角色 -->
+    <insert id="insertUserRole">
+        INSERT INTO sys_user_role (user_id, role_id)
+        SELECT #{userId}, r.id FROM sys_role r
+        WHERE r.role_code = #{roleCode}
+          AND (r.deleted IS NULL OR r.deleted = 0)
+    </insert>
+
+    <!-- 查询用户的权限编码列表（通过角色间接获得） -->
+    <select id="selectPermCodesByUserId" resultType="String">
+        SELECT DISTINCT p.perm_code
+        FROM sys_permission p
+        INNER JOIN sys_role_permission rp ON p.id = rp.perm_id
+        INNER JOIN sys_role r ON rp.role_id = r.id
+        INNER JOIN sys_user_role ur ON r.id = ur.role_id
+        WHERE ur.user_id = #{userId}
+          AND (r.deleted IS NULL OR r.deleted = 0)
+          AND (p.deleted IS NULL OR p.deleted = 0)
+    </select>
+
+    <!-- 更新最后登录信息 -->
+    <update id="updateLoginInfo">
+        UPDATE sys_user
+        SET last_login_time = #{loginTime},
+            last_login_ip   = #{loginIp}
+        WHERE id = #{id}
+    </update>
+
+</mapper>
