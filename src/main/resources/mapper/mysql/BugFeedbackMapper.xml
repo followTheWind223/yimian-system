@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yimian.system.mapper.BugFeedbackMapper">
+
+    <sql id="Base_Column_List">
+        id, user_id, username, title, content, page_url, contact, status,
+        created_at, updated_at, deleted
+    </sql>
+
+    <select id="selectFeedbackPage" resultType="com.yimian.system.entity.BugFeedback">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_bug_feedback
+        WHERE (deleted IS NULL OR deleted = 0)
+        <if test="keyword != null and keyword != ''">
+            AND (
+                title LIKE CONCAT('%', #{keyword}, '%')
+                OR content LIKE CONCAT('%', #{keyword}, '%')
+                OR username LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>
