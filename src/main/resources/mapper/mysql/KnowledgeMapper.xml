@@ -50,6 +50,28 @@
         ORDER BY k.created_at DESC
     </select>
 
+    <select id="countPage" resultType="Long">
+        SELECT COUNT(DISTINCT k.id)
+        FROM sys_knowledge k
+        <if test="tagId != null">
+            INNER JOIN sys_knowledge_tag kt ON k.id = kt.knowledge_id
+        </if>
+        WHERE <include refid="Not_Deleted"/>
+        <if test="keyword != null and keyword != ''">
+            AND (k.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR k.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="difficulty != null">
+            AND k.difficulty = #{difficulty}
+        </if>
+        <if test="tagId != null">
+            AND kt.tag_id = #{tagId}
+        </if>
+        <if test="status != null">
+            AND k.status = #{status}
+        </if>
+    </select>
+
     <!-- 增加浏览次数 -->
     <update id="incrementViewCount">
         UPDATE sys_knowledge SET view_count = view_count + 1 WHERE id = #{id}
@@ -113,6 +135,16 @@
             AND k.status = #{status}
         </if>
         ORDER BY k.created_at DESC
+    </select>
+
+    <select id="countMyPage" resultType="Long">
+        SELECT COUNT(1)
+        FROM sys_knowledge k
+        WHERE <include refid="Not_Deleted"/>
+          AND k.submit_user_id = #{userId}
+        <if test="status != null">
+            AND k.status = #{status}
+        </if>
     </select>
 
 </mapper>

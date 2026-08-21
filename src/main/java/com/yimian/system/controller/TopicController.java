@@ -25,6 +25,16 @@ public class TopicController {
         return Result.success(topicService.list(keyword));
     }
 
+    @OperationLog(module = "TOPIC", operation = "create topic", description = "create topic: #{#name}")
+    @Operation(summary = "create topic for blog editor")
+    @PostMapping("/topics")
+    @PreAuthorize("hasAuthority('blog:create')")
+    public Result<TopicVO> createForUser(@RequestParam String name,
+                                         @RequestParam(required = false) String description,
+                                         @RequestParam(required = false) String color) {
+        return Result.success(topicService.findOrCreate(name, description, color));
+    }
+
     @OperationLog(module = "TOPIC", operation = "新增话题", description = "新增话题: #{#name}")
     @Operation(summary = "新增话题（管理员）")
     @PostMapping("/admin/topics")

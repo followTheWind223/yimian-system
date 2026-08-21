@@ -24,6 +24,11 @@ public interface KnowledgeMapper extends BaseMapper<Knowledge> {
                                @Param("tagId") Long tagId,
                                @Param("status") Integer status);
 
+    Long countPage(@Param("keyword") String keyword,
+                   @Param("difficulty") Integer difficulty,
+                   @Param("tagId") Long tagId,
+                   @Param("status") Integer status);
+
     /**
      * 查询知识的标签ID列表
      */
@@ -55,4 +60,7 @@ public interface KnowledgeMapper extends BaseMapper<Knowledge> {
      */
     List<Knowledge> selectMyPage(@Param("userId") Long userId,
                                   @Param("status") Integer status);
+
+    Long countMyPage(@Param("userId") Long userId,
+                     @Param("status") Integer status);
 }

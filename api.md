@@ -6,6 +6,10 @@
 
 自 `system/sql/33-use-snowflake-id-for-user-blog-favorite-folder.sql` 起，新注册用户、新建博客、新建收藏夹的主键 ID 由后端应用通过 MyBatis-Plus `IdType.ASSIGN_ID` 生成雪花 ID，不再依赖数据库自增。
 
+### Long ID JSON 序列化
+
+后端接口响应中的 Java `Long`/`long` 字段统一按 JSON 字符串返回，避免浏览器 JavaScript `number` 对雪花 ID 产生精度丢失。前端接收 `id`、`authorId`、`refId`、`targetId`、`folderId`、`blogId`、`knowledgeId` 等 ID 字段时应按字符串处理；请求路径参数或请求体中传回这些 ID 时可以继续传十进制字符串。
+
 ---
 
 ## 19. 用户公开资料与关注系统
@@ -66,6 +70,120 @@
 
 成功响应 `data` 对齐 `PageInfo`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
 题目列表项为 `KnowledgeVO`，博客列表项为 `BlogVO`。
+
+---
+
+## 20. 问题反馈系统
+
+> 相关 SQL：`system/sql/35-init-bug-feedback.sql`
+
+用户端支持提交服务器 Bug 和问题所在页面，管理端支持查看反馈内容并更新处理状态。
+
+### 20.1 提交问题反馈
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/feedback` |
+| 请求方式 | `POST` |
+| 认证要求 | 需携带 Token |
+
+**Request Body**：
+
+```json
+{
+  "title": "博客发布后详情页提示不存在",
+  "content": "点击发布成功后跳转详情页，页面提示博客不存在。后端日志显示查询 ID 与数据库 ID 不一致。",
+  "pageUrl": "http://47.105.103.37:88/#/app/blogs/write",
+  "contact": "admin@example.com"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `title` | String | ✅ | 反馈标题，最长 120 字 |
+| `content` | String | ✅ | 问题描述，最长 2000 字 |
+| `pageUrl` | String | | 问题所在页面，最长 500 字 |
+| `contact` | String | | 可选联系方式，最长 120 字 |
+
+成功响应 `data` 为 `BugFeedbackVO`。
+
+### 20.2 管理端反馈列表
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/feedback` |
+| 请求方式 | `GET` |
+| 权限要求 | `ROLE_ADMIN` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | | 1 | 页码 |
+| `size` | Integer | | 10 | 每页条数，最大 50 |
+| `keyword` | String | | - | 搜索标题、内容、用户名 |
+| `status` | Integer | | - | 0=待处理 1=处理中 2=已解决 3=已忽略 |
+
+成功响应 `data` 对齐 `PageInfo<BugFeedbackVO>`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+
+### 20.3 管理端反馈详情与状态
+
+| 接口 | 方法 | 权限 | 说明 |
+|------|------|------|------|
+| `/api/admin/feedback/{id}` | `GET` | `ROLE_ADMIN` | 查看反馈详情 |
+| `/api/admin/feedback/{id}/status?status=2` | `PUT` | `ROLE_ADMIN` | 更新反馈状态 |
+
+`BugFeedbackVO` 字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 反馈 ID，JSON 中按字符串返回 |
+| `userId` | Long | 反馈用户 ID，JSON 中按字符串返回 |
+| `username` | String | 反馈用户名快照 |
+| `title` | String | 反馈标题 |
+| `content` | String | 问题描述 |
+| `pageUrl` | String | 问题所在页面 |
+| `contact` | String | 联系方式 |
+| `status` | Integer | 0=待处理 1=处理中 2=已解决 3=已忽略 |
+| `createdAt` | String | 提交时间 |
+| `updatedAt` | String | 更新时间 |
+
+---
+
+## 21. 系统审核开关
+
+> 相关 SQL：`system/sql/36-system-setting-audit-switch.sql`
+
+题目提交审核开关持久化存储在 `sys_system_setting`，配置键为 `knowledge.audit.enabled`。配置文件 `audit.enabled` 仍作为首次初始化默认值，默认开启审核。
+
+### 21.1 查询题目审核开关
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/knowledge/audit-switch` |
+| 请求方式 | `GET` |
+| 认证要求 | 需携带 Token |
+
+成功响应 `data` 为 Boolean：
+
+| 值 | 说明 |
+|------|------|
+| `true` | 提交后进入待审核 |
+| `false` | 提交后直接公开 |
+
+### 21.2 设置题目审核开关
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/knowledge/audit-switch?enabled=true` |
+| 请求方式 | `PUT` |
+| 权限要求 | `knowledge:audit` |
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `enabled` | Boolean | ✅ | `true` 开启审核，`false` 关闭审核 |
+
+成功响应 `data` 为更新后的 Boolean 状态。该设置会持久化到数据库，重启后仍生效。
 
 ---
 
@@ -1165,7 +1283,7 @@ timeDecay = 1 / (1 + days_since_publish * 0.1)
 | `name` | String | 标签名称 |
 | `color` | String | 颜色代码（如 `#e74c3c`） |
 | `sort` | Integer | 排序号 |
-| `usageCount` | Integer | 关联知识数量 |
+| `usageCount` | Integer | 已审核通过且未删除的公开题目数量 |
 
 ### 12.2 管理员标签 CRUD
 
@@ -1497,7 +1615,27 @@ timeDecay = 1 / (1 + days_since_publish * 0.1)
 }
 ```
 
-### 15.2 话题管理（管理员）
+不传 `keyword` 时，默认优先返回 Redis 热门话题榜（`hot:topic:rank`）中的话题；Redis 无数据时回退为数据库 `blogCount` 排序。传入 `keyword` 时按数据库话题名称搜索。
+
+### 15.2 创建话题（用户端）
+
+| 项目 | 值 |
+|------|-----|
+| **接口地址** | `/api/topics` |
+| **请求方式** | `POST` |
+| **权限要求** | `blog:create` |
+
+**Query 参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `name` | String | 是 | 话题名称，最长 50 字符 |
+| `description` | String | | 话题描述 |
+| `color` | String | | 话题颜色 |
+
+如果同名话题已存在，接口直接返回已有 `TopicVO`；否则创建新话题并返回。
+
+### 15.3 话题管理（管理员）
 
 | 接口 | 方法 | 地址 | 权限 | 说明 |
 |------|------|------|------|------|
@@ -1636,3 +1774,92 @@ Query 参数：
 ## 18. 消息通知模块
 
 > 接口前缀：/api/notifications
+---
+
+## 22. 系统公告
+
+> 相关 SQL：`system/sql/37-system-announcement.sql`
+
+管理员可发布系统公告。公告会投递到用户通知表：
+- `important=true`：用户进入用户端页面时弹窗提醒，同时也进入消息中心。
+- `important=false`：仅进入消息中心和头像下拉通知列表。
+
+### 22.1 管理端发布系统公告
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/announcements` |
+| 请求方式 | `POST` |
+| 权限要求 | `ROLE_ADMIN` 或 `announcement:create` |
+
+**Request Body**
+
+```json
+{
+  "title": "系统维护通知",
+  "content": "今晚 23:00-23:30 将进行系统维护，期间可能出现短暂不可用。",
+  "important": true
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `title` | String | 是 | 公告标题，最长 120 字 |
+| `content` | String | 是 | 公告内容，最长 2000 字 |
+| `important` | Boolean | 是 | 是否重要；重要公告会弹窗 |
+
+成功响应 `data` 为 `SystemAnnouncementVO`。发布成功后，会向所有启用用户写入 `sys_notification`，通知字段为 `type=system_announcement`、`targetType=system_announcement`、`targetId=公告ID`。
+
+### 22.2 管理端公告列表
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/announcements` |
+| 请求方式 | `GET` |
+| 权限要求 | `ROLE_ADMIN` 或 `announcement:list` |
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | 否 | 1 | 页码 |
+| `size` | Integer | 否 | 10 | 每页条数，最大 50 |
+| `keyword` | String | 否 | - | 搜索标题或内容 |
+| `important` | Boolean | 否 | - | 是否重要 |
+
+成功响应 `data` 对齐 `PageInfo<SystemAnnouncementVO>`：`data.list`、`data.total`、`data.pageNum`、`data.pageSize`。
+
+### 22.3 用户端未读重要公告
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/announcements/important-unread` |
+| 请求方式 | `GET` |
+| 认证要求 | 需要登录 |
+
+返回当前用户未确认的重要公告列表。成功响应 `data` 为 `SystemAnnouncementVO[]`，其中 `notificationId` 为对应通知 ID。
+
+### 22.4 用户端确认重要公告
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/announcements/{id}/confirm` |
+| 请求方式 | `POST` |
+| 认证要求 | 需要登录 |
+
+确认后会把当前用户对应的 `system_announcement` 通知标记为已读；公告仍保留在消息中心历史记录中。
+
+### 22.5 SystemAnnouncementVO 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Long | 公告 ID，JSON 中按字符串返回 |
+| `notificationId` | Long | 当前用户对应通知 ID，仅用户端未读重要公告接口返回 |
+| `title` | String | 公告标题 |
+| `content` | String | 公告内容 |
+| `important` | Boolean | 是否重要 |
+| `enabled` | Boolean | 是否启用 |
+| `creatorId` | Long | 发布人 ID，JSON 中按字符串返回 |
+| `creatorName` | String | 发布人显示名 |
+| `createdAt` | String | 创建时间 |
+| `updatedAt` | String | 更新时间 |

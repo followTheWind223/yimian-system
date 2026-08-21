@@ -2,14 +2,17 @@ package com.yimian.system.service.impl;
 
 import com.yimian.system.entity.Knowledge;
 import com.yimian.system.entity.Tag;
+import com.yimian.system.entity.Topic;
 import com.yimian.system.entity.User;
 import com.yimian.system.mapper.KnowledgeMapper;
 import com.yimian.system.mapper.KnowledgeTagMapper;
 import com.yimian.system.mapper.TagMapper;
+import com.yimian.system.mapper.TopicMapper;
 import com.yimian.system.mapper.UserMapper;
 import com.yimian.system.service.HotDataService;
 import com.yimian.system.vo.KnowledgeVO;
 import com.yimian.system.vo.KnowledgeVO.TagVO;
+import com.yimian.system.vo.TopicVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -39,6 +42,7 @@ public class HotDataServiceImpl implements HotDataService {
     private static final String DAILY_RANK_KEY = "hot:knowledge:daily";
     private static final String WEEKLY_RANK_KEY = "hot:knowledge:weekly";
     private static final String COUNTER_KEY_FORMAT = "hot:knowledge:%s:%s";
+    private static final String TOPIC_RANK_KEY = "hot:topic:rank";
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
     private static final int COUNTER_KEEP_DAYS = 14;
@@ -52,6 +56,7 @@ public class HotDataServiceImpl implements HotDataService {
     private final KnowledgeMapper knowledgeMapper;
     private final KnowledgeTagMapper knowledgeTagMapper;
     private final TagMapper tagMapper;
+    private final TopicMapper topicMapper;
     private final UserMapper userMapper;
 
     @Override
@@ -82,6 +87,47 @@ public class HotDataServiceImpl implements HotDataService {
     @Override
     public List<KnowledgeVO> getWeeklyHotKnowledge(Integer limit) {
         return getHotKnowledge(WEEKLY_RANK_KEY, normalizeLimit(limit));
+    }
+
+    @Override
+    public void incrTopic(Long topicId, int delta) {
+        if (topicId == null || delta == 0) {
+            return;
+        }
+        try {
+            Double score = stringRedisTemplate.opsForZSet()
+                    .incrementScore(TOPIC_RANK_KEY, topicId.toString(), delta);
+            if (score != null && score <= 0) {
+                stringRedisTemplate.opsForZSet().remove(TOPIC_RANK_KEY, topicId.toString());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to record topic hot event: topicId={}, delta={}", topicId, delta, e);
+        }
+    }
+
+    @Override
+    public List<TopicVO> getHotTopics(Integer limit) {
+        int normalizedLimit = normalizeLimit(limit);
+        try {
+            Set<String> members = stringRedisTemplate.opsForZSet()
+                    .reverseRange(TOPIC_RANK_KEY, 0, normalizedLimit - 1);
+            if (members != null && !members.isEmpty()) {
+                List<Long> ids = members.stream()
+                        .map(this::parseLong)
+                        .filter(id -> id != null)
+                        .collect(Collectors.toList());
+                List<TopicVO> hotList = toTopicVOList(ids);
+                if (!hotList.isEmpty()) {
+                    return hotList;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query Redis topic hot ranking", e);
+        }
+        return topicMapper.selectAll(null).stream()
+                .limit(normalizedLimit)
+                .map(this::toTopicVO)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -267,6 +313,36 @@ public class HotDataServiceImpl implements HotDataService {
         } else {
             vo.setTags(Collections.emptyList());
         }
+        return vo;
+    }
+
+    private List<TopicVO> toTopicVOList(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Topic> topics = topicMapper.selectByIds(ids);
+        Map<Long, Topic> topicMap = topics.stream()
+                .collect(Collectors.toMap(Topic::getId, item -> item, (a, b) -> a));
+        List<TopicVO> result = new ArrayList<>();
+        for (Long id : ids) {
+            Topic topic = topicMap.get(id);
+            if (topic != null) {
+                result.add(toTopicVO(topic));
+            }
+        }
+        return result;
+    }
+
+    private TopicVO toTopicVO(Topic topic) {
+        TopicVO vo = new TopicVO();
+        vo.setId(topic.getId());
+        vo.setName(topic.getName());
+        vo.setDescription(topic.getDescription());
+        vo.setColor(topic.getColor());
+        vo.setSort(topic.getSort());
+        vo.setBlogCount(topic.getBlogCount() != null ? topic.getBlogCount() : 0);
+        vo.setCreatedAt(topic.getCreatedAt());
+        vo.setUpdatedAt(topic.getUpdatedAt());
         return vo;
     }
 

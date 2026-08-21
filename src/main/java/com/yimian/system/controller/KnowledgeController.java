@@ -134,7 +134,7 @@ public class KnowledgeController {
     // ==================== 审核开关（管理员） ====================
 
     @OperationLog(module = "KNOWLEDGE", operation = "审核开关", description = "修改审核开关为: #{#enabled}")
-    @Operation(summary = "设置审核开关（管理员，运行时生效）")
+    @Operation(summary = "设置审核开关（管理员，持久化生效）")
     @PutMapping("/audit-switch")
     @PreAuthorize("hasAuthority('knowledge:audit')")
     public Result<Boolean> setAuditSwitch(@RequestParam boolean enabled) {
@@ -144,7 +144,6 @@ public class KnowledgeController {
 
     @Operation(summary = "查询审核开关状态")
     @GetMapping("/audit-switch")
-    @PreAuthorize("hasAuthority('knowledge:audit')")
     public Result<Boolean> getAuditSwitch() {
         return Result.success(knowledgeService.getAuditEnabled());
     }

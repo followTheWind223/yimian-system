@@ -16,4 +16,13 @@
           AND <include refid="Not_Deleted"/>
     </select>
 
+    <select id="countApprovedUsageByTagId" resultType="Long">
+        SELECT COUNT(DISTINCT k.id)
+        FROM sys_knowledge_tag kt
+        INNER JOIN sys_knowledge k ON k.id = kt.knowledge_id
+        WHERE kt.tag_id = #{tagId}
+          AND k.status = 1
+          AND (k.deleted IS NULL OR k.deleted = 0)
+    </select>
+
 </mapper>

@@ -11,6 +11,7 @@ import com.yimian.system.dto.BlogUpdateDto;
 import com.yimian.system.entity.*;
 import com.yimian.system.mapper.*;
 import com.yimian.system.service.BlogService;
+import com.yimian.system.service.HotDataService;
 import com.yimian.system.vo.BlogVO;
 import com.yimian.system.vo.BlogVO.RefVO;
 import com.yimian.system.vo.BlogVO.TopicSimple;
@@ -43,6 +44,7 @@ public class BlogServiceImpl implements BlogService {
     private final BlogLikeMapper blogLikeMapper;
     private final BlogCollectMapper blogCollectMapper;
     private final FavoriteItemMapper favoriteItemMapper;
+    private final HotDataService hotDataService;
 
     @Override
     @Transactional
@@ -72,8 +74,10 @@ public class BlogServiceImpl implements BlogService {
         // 保存图片
         saveImages(blog.getId(), dto.getImages());
 
-        // 保存话题关联
-        saveTopics(blog.getId(), dto.getTopicIds());
+        // 保存话题关联；只有已发布博客计入话题热度。
+        List<Long> topicIds = normalizeTopicIds(dto.getTopicIds());
+        saveTopicRelations(blog.getId(), topicIds);
+        syncTopicUsage(Collections.emptyList(), topicIds, false, isPublished(blog));
 
         log.info("Blog created: id={}, userId={}, status={}", blog.getId(), userId, blog.getStatus());
         return toVO(blog);
@@ -83,6 +87,9 @@ public class BlogServiceImpl implements BlogService {
     @Transactional
     public BlogVO update(Long id, BlogUpdateDto dto, Long userId) {
         Blog blog = getOwnedBlog(id, userId);
+        boolean wasPublished = isPublished(blog);
+        List<Long> previousTopicIds = normalizeTopicIds(blogTopicMapper.selectTopicIdsByBlogId(id));
+        List<Long> nextTopicIds = previousTopicIds;
 
         if (dto.getTitle() != null) {
             blog.setTitle(requireText(dto.getTitle(), "博客标题不能为空"));
@@ -116,12 +123,14 @@ public class BlogServiceImpl implements BlogService {
             blog.setRefId(refType == null ? null : dto.getRefId());
         }
         if (dto.getTopicIds() != null) {
-            blog.setTopicIds(joinTopicIds(dto.getTopicIds()));
+            nextTopicIds = normalizeTopicIds(dto.getTopicIds());
+            blog.setTopicIds(joinTopicIds(nextTopicIds));
             blogTopicMapper.deleteByBlogId(id);
-            saveTopics(id, dto.getTopicIds());
+            saveTopicRelations(id, nextTopicIds);
         }
 
         blogMapper.updateById(blog);
+        syncTopicUsage(previousTopicIds, nextTopicIds, wasPublished, isPublished(blog));
         log.info("Blog updated: id={}, userId={}", id, userId);
         return toVO(blog);
     }
@@ -133,9 +142,10 @@ public class BlogServiceImpl implements BlogService {
         blogImageMapper.deleteByBlogId(blog.getId());
         blogTopicMapper.deleteByBlogId(blog.getId());
         // 更新话题的 blog_count
-        List<Long> topicIds = splitTopicIds(blog.getTopicIds());
-        for (Long topicId : topicIds) {
-            topicMapper.incrementBlogCount(topicId, -1);
+        if (isPublished(blog)) {
+            for (Long topicId : splitTopicIds(blog.getTopicIds())) {
+                applyTopicDelta(topicId, -1);
+            }
         }
         blogMapper.deleteById(blog.getId());
         log.info("Blog deleted: id={}, userId={}", id, userId);
@@ -269,12 +279,15 @@ public class BlogServiceImpl implements BlogService {
     @Transactional
     public BlogVO adminUpdateStatus(Long id, Integer status) {
         Blog blog = getExistingBlog(id);
+        boolean wasPublished = isPublished(blog);
         Integer nextStatus = normalizeAdminStatus(status);
         blogMapper.updateStatus(id, nextStatus);
         blog.setStatus(nextStatus);
         if (Integer.valueOf(STATUS_PUBLISHED).equals(nextStatus) && blog.getPublishedAt() == null) {
             blog.setPublishedAt(LocalDateTime.now());
         }
+        List<Long> topicIds = splitTopicIds(blog.getTopicIds());
+        syncTopicUsage(topicIds, topicIds, wasPublished, isPublished(blog));
         return toVO(blog);
     }
 
@@ -284,9 +297,10 @@ public class BlogServiceImpl implements BlogService {
         Blog blog = getExistingBlog(id);
         blogImageMapper.deleteByBlogId(blog.getId());
         blogTopicMapper.deleteByBlogId(blog.getId());
-        List<Long> topicIds = splitTopicIds(blog.getTopicIds());
-        for (Long topicId : topicIds) {
-            topicMapper.incrementBlogCount(topicId, -1);
+        if (isPublished(blog)) {
+            for (Long topicId : splitTopicIds(blog.getTopicIds())) {
+                applyTopicDelta(topicId, -1);
+            }
         }
         blogMapper.deleteById(blog.getId());
         log.info("Blog admin deleted: id={}", id);
@@ -317,7 +331,18 @@ public class BlogServiceImpl implements BlogService {
 
     // ==================== 话题 ====================
 
-    private void saveTopics(Long blogId, List<Long> topicIds) {
+    private List<Long> normalizeTopicIds(List<Long> topicIds) {
+        if (topicIds == null || topicIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return topicIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .limit(8)
+                .collect(Collectors.toList());
+    }
+
+    private void saveTopicRelations(Long blogId, List<Long> topicIds) {
         if (topicIds == null || topicIds.isEmpty()) {
             return;
         }
@@ -328,11 +353,29 @@ public class BlogServiceImpl implements BlogService {
                 .collect(Collectors.toList());
         if (!valid.isEmpty()) {
             blogTopicMapper.insertBatch(blogId, valid);
-            // 更新话题的 blog_count
-            for (Long topicId : valid) {
-                topicMapper.incrementBlogCount(topicId, 1);
+        }
+    }
+
+    private void syncTopicUsage(List<Long> previousTopicIds, List<Long> nextTopicIds,
+                                boolean wasPublished, boolean nowPublished) {
+        Set<Long> previous = wasPublished ? new HashSet<>(normalizeTopicIds(previousTopicIds)) : Collections.emptySet();
+        Set<Long> next = nowPublished ? new HashSet<>(normalizeTopicIds(nextTopicIds)) : Collections.emptySet();
+
+        for (Long topicId : previous) {
+            if (!next.contains(topicId)) {
+                applyTopicDelta(topicId, -1);
             }
         }
+        for (Long topicId : next) {
+            if (!previous.contains(topicId)) {
+                applyTopicDelta(topicId, 1);
+            }
+        }
+    }
+
+    private void applyTopicDelta(Long topicId, int delta) {
+        topicMapper.incrementBlogCount(topicId, delta);
+        hotDataService.incrTopic(topicId, delta);
     }
 
     private String joinTopicIds(List<Long> topicIds) {
@@ -359,6 +402,10 @@ public class BlogServiceImpl implements BlogService {
     }
 
     // ==================== 校验 ====================
+
+    private boolean isPublished(Blog blog) {
+        return blog != null && Integer.valueOf(STATUS_PUBLISHED).equals(blog.getStatus());
+    }
 
     private Blog getExistingBlog(Long id) {
         Blog blog = blogMapper.selectById(id);

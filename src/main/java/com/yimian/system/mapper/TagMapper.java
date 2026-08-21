@@ -15,4 +15,6 @@ public interface TagMapper extends BaseMapper<Tag> {
      * 根据ID列表批量查询标签
      */
     List<Tag> selectByIds(@Param("ids") List<Long> ids);
+
+    Long countApprovedUsageByTagId(@Param("tagId") Long tagId);
 }

@@ -3,6 +3,7 @@ package com.yimian.system.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
@@ -54,6 +55,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         timeModule.addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer(dtf));
         timeModule.addDeserializer(LocalDate.class, new LocalDateDeserializer(df));
         timeModule.addDeserializer(LocalTime.class, new LocalTimeDeserializer(tf));
+        timeModule.addSerializer(Long.class, ToStringSerializer.instance);
+        timeModule.addSerializer(Long.TYPE, ToStringSerializer.instance);
 
         mapper.registerModule(timeModule);
         mapper.registerModule(new JavaTimeModule());

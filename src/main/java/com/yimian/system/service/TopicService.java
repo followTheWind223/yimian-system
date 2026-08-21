@@ -8,6 +8,8 @@ public interface TopicService {
 
     List<TopicVO> list(String keyword);
 
+    TopicVO findOrCreate(String name, String description, String color);
+
     TopicVO create(String name, String description, String color);
 
     TopicVO update(Long id, String name, String description, String color, Integer sort);

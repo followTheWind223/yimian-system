@@ -14,7 +14,7 @@
         <if test="keyword != null and keyword != ''">
           AND name LIKE CONCAT('%', #{keyword}, '%')
         </if>
-        ORDER BY sort ASC, blog_count DESC
+        ORDER BY COALESCE(blog_count, 0) DESC, sort ASC, id DESC
     </select>
 
     <select id="selectByIds" resultType="com.yimian.system.entity.Topic">

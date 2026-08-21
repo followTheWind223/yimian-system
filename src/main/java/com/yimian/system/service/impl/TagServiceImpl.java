@@ -109,11 +109,8 @@ public class TagServiceImpl implements TagService {
         vo.setCreatedAt(tag.getCreatedAt());
         vo.setUpdatedAt(tag.getUpdatedAt());
 
-        // 统计关联知识数量
-        Long count = knowledgeTagMapper.selectCount(
-            new LambdaQueryWrapper<com.yimian.system.entity.KnowledgeTag>()
-                .eq(com.yimian.system.entity.KnowledgeTag::getTagId, tag.getId())
-        );
+        // 只统计审核通过的公开题目，避免首页方向数量把待审核题目算进去。
+        Long count = tagMapper.countApprovedUsageByTagId(tag.getId());
         vo.setUsageCount(count != null ? count.intValue() : 0);
 
         return vo;

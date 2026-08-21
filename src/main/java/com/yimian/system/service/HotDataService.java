@@ -1,6 +1,7 @@
 package com.yimian.system.service;
 
 import com.yimian.system.vo.KnowledgeVO;
+import com.yimian.system.vo.TopicVO;
 
 import java.util.List;
 
@@ -26,6 +27,10 @@ public interface HotDataService {
 
     /** 本周热门题目 */
     List<KnowledgeVO> getWeeklyHotKnowledge(Integer limit);
+
+    void incrTopic(Long topicId, int delta);
+
+    List<TopicVO> getHotTopics(Integer limit);
 
     /** 重建 Redis 热榜 */
     void rebuildKnowledgeHotRankings();

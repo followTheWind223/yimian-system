@@ -14,7 +14,7 @@ public interface KnowledgeService {
     /** 直接上传（跳过审核，需要权限） */
     KnowledgeVO createDirect(KnowledgeCreateDto dto, Long userId);
 
-    /** 提交审核（受 audit.enabled 开关控制） */
+    /** 提交审核（受系统审核开关控制） */
     KnowledgeVO submit(KnowledgeCreateDto dto, Long userId);
 
     /** 编辑题目 */
@@ -44,7 +44,7 @@ public interface KnowledgeService {
     /** 获取审核开关状态 */
     boolean getAuditEnabled();
 
-    /** 设置审核开关（管理员，运行时生效，重启后恢复为 application.yml 配置值） */
+    /** 设置审核开关（管理员，持久化生效） */
     void setAuditEnabled(boolean enabled);
 
     /** 审核通过 */

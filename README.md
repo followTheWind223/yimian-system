@@ -187,7 +187,7 @@ CREATE TABLE sys_user (
 
 ### 3. 修改配置
 
-编辑 `src/main/resources/application-dev.yml`，根据本地环境修改数据库连接：
+编辑 `src/main/resources/application.yml`，根据本地环境修改数据库连接：
 
 ```yaml
 spring:
@@ -198,7 +198,7 @@ spring:
       password: 你的密码
 ```
 
-> **生产环境**：复制 `application-prod.yml`，修改对应配置后通过 `--spring.profiles.active=prod` 激活。
+> 当前项目只保留一个 `application.yml`，部署前直接修改该文件中的连接信息即可。
 
 ### 4. 启动后端
 
@@ -225,14 +225,10 @@ mvn clean package -DskipTests
 java -jar target/system-0.0.1-SNAPSHOT.jar
 ```
 
-### 5. 指定环境启动
+### 5. 打包运行
 
 ```bash
-# 开发环境（默认）
-java -jar target/system-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
-
-# 生产环境
-java -jar target/system-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+java -jar target/system-0.0.1-SNAPSHOT.jar
 ```
 
 ### 6. 验证启动
@@ -272,7 +268,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 **Q：启动时报数据库连接失败？**
 - 确保 MySQL 服务已启动且数据库已创建
-- 检查 `application-dev.yml` 中的用户名密码是否正确
+- 检查 `application.yml` 中的用户名密码是否正确
 
 **Q：端口被占用？**
 - 修改 `application.yml` 中 `server.port` 为其他端口

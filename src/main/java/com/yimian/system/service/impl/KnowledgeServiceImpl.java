@@ -2,6 +2,7 @@ package com.yimian.system.service.impl;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yimian.system.common.exception.BusinessException;
 import com.yimian.system.common.result.ResultCode;
 import com.yimian.system.dto.KnowledgeCreateDto;
@@ -9,11 +10,13 @@ import com.yimian.system.dto.KnowledgeQueryDto;
 import com.yimian.system.dto.KnowledgeUpdateDto;
 import com.yimian.system.entity.Knowledge;
 import com.yimian.system.entity.KnowledgeLike;
+import com.yimian.system.entity.SystemSetting;
 import com.yimian.system.entity.Tag;
 import com.yimian.system.entity.User;
 import com.yimian.system.mapper.KnowledgeLikeMapper;
 import com.yimian.system.mapper.KnowledgeMapper;
 import com.yimian.system.mapper.KnowledgeTagMapper;
+import com.yimian.system.mapper.SystemSettingMapper;
 import com.yimian.system.mapper.TagMapper;
 import com.yimian.system.mapper.UserMapper;
 import com.yimian.system.service.HotDataService;
@@ -39,15 +42,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class KnowledgeServiceImpl implements KnowledgeService {
 
+    private static final String AUDIT_SETTING_KEY = "knowledge.audit.enabled";
+
     private final KnowledgeMapper knowledgeMapper;
     private final KnowledgeLikeMapper knowledgeLikeMapper;
     private final KnowledgeTagMapper knowledgeTagMapper;
     private final TagMapper tagMapper;
+    private final SystemSettingMapper systemSettingMapper;
     private final UserMapper userMapper;
     private final HotDataService hotDataService;
 
-    @Value("${audit.enabled:false}")
-    private boolean auditEnabled;
+    @Value("${audit.enabled:true}")
+    private boolean defaultAuditEnabled;
 
     // ==================== 直接上传（跳过审核） ====================
 
@@ -78,6 +84,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
         Knowledge entity = buildEntity(dto, userId);
         entity.setContentHash(hash);
+        boolean auditEnabled = getAuditEnabled();
         entity.setStatus(auditEnabled ? 0 : 1);
 
         knowledgeMapper.insert(entity);
@@ -110,7 +117,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         if (dto.getDifficulty() != null) entity.setDifficulty(dto.getDifficulty());
 
         // 编辑后重新提交审核
-        entity.setStatus(auditEnabled ? 0 : 1);
+        boolean auditEnabled = getAuditEnabled();
         entity.setStatus(auditEnabled ? 0 : 1);
         knowledgeMapper.updateById(entity);
 
@@ -148,8 +155,16 @@ public class KnowledgeServiceImpl implements KnowledgeService {
                 query.getDifficulty(),
                 query.getTagId(),
                 query.getStatus());
+        PageInfo<Knowledge> source = new PageInfo<>(list);
         List<KnowledgeVO> voList = list.stream().map(this::buildVO).collect(Collectors.toList());
-        return new PageInfo<>(voList);
+        PageInfo<KnowledgeVO> result = copyPage(source, voList);
+        Long total = knowledgeMapper.countPage(
+                query.getKeyword(),
+                query.getDifficulty(),
+                query.getTagId(),
+                query.getStatus());
+        applyTotal(result, total != null ? total : source.getTotal());
+        return result;
     }
 
     // ==================== 详情 ====================
@@ -212,8 +227,12 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     public PageInfo<KnowledgeVO> myList(Integer page, Integer size, Integer status, Long userId) {
         PageHelper.startPage(page, size);
         List<Knowledge> list = knowledgeMapper.selectMyPage(userId, status);
+        PageInfo<Knowledge> source = new PageInfo<>(list);
         List<KnowledgeVO> voList = list.stream().map(this::buildVO).collect(Collectors.toList());
-        return new PageInfo<>(voList);
+        PageInfo<KnowledgeVO> result = copyPage(source, voList);
+        Long total = knowledgeMapper.countMyPage(userId, status);
+        applyTotal(result, total != null ? total : source.getTotal());
+        return result;
     }
 
     @Override
@@ -222,20 +241,52 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         List<Knowledge> list = knowledgeMapper.selectMyPage(userId, 1);
         PageInfo<Knowledge> source = new PageInfo<>(list);
         List<KnowledgeVO> voList = list.stream().map(this::buildVO).collect(Collectors.toList());
-        return copyPage(source, voList);
+        PageInfo<KnowledgeVO> result = copyPage(source, voList);
+        Long total = knowledgeMapper.countMyPage(userId, 1);
+        applyTotal(result, total != null ? total : source.getTotal());
+        return result;
     }
 
-    // ==================== 审核开关（运行时） ====================
+    // ==================== 审核开关（系统配置） ====================
 
     @Override
     public boolean getAuditEnabled() {
-        return auditEnabled;
+        SystemSetting setting = findAuditSetting();
+        if (setting == null) {
+            setting = createDefaultAuditSetting();
+        }
+        return Boolean.parseBoolean(setting.getSettingValue());
     }
 
     @Override
+    @Transactional
     public void setAuditEnabled(boolean enabled) {
-        this.auditEnabled = enabled;
-        log.info("审核开关已变更为: {}", enabled ? "开启" : "关闭");
+        SystemSetting setting = findAuditSetting();
+        if (setting == null) {
+            setting = createDefaultAuditSetting();
+        }
+        setting.setSettingValue(Boolean.toString(enabled));
+        systemSettingMapper.updateById(setting);
+        log.info("审核开关已持久化变更为: {}", enabled ? "开启" : "关闭");
+    }
+
+    private SystemSetting findAuditSetting() {
+        return systemSettingMapper.selectOne(new LambdaQueryWrapper<SystemSetting>()
+                .eq(SystemSetting::getSettingKey, AUDIT_SETTING_KEY)
+                .last("LIMIT 1"));
+    }
+
+    private synchronized SystemSetting createDefaultAuditSetting() {
+        SystemSetting existing = findAuditSetting();
+        if (existing != null) {
+            return existing;
+        }
+        SystemSetting setting = new SystemSetting();
+        setting.setSettingKey(AUDIT_SETTING_KEY);
+        setting.setSettingValue(Boolean.toString(defaultAuditEnabled));
+        setting.setRemark("题目提交审核开关：true=提交后待审核，false=提交后直接公开");
+        systemSettingMapper.insert(setting);
+        return setting;
     }
 
     // ==================== 审核通过 ====================
@@ -425,6 +476,20 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         target.setNavigateFirstPage(source.getNavigateFirstPage());
         target.setNavigateLastPage(source.getNavigateLastPage());
         return target;
+    }
+
+    private void applyTotal(PageInfo<KnowledgeVO> page, long total) {
+        int pageNum = page.getPageNum() > 0 ? page.getPageNum() : 1;
+        int pageSize = page.getPageSize() > 0 ? page.getPageSize() : 10;
+        int pages = pageSize > 0 ? (int) Math.ceil((double) total / pageSize) : 0;
+        page.setTotal(total);
+        page.setPages(pages);
+        page.setIsFirstPage(pageNum <= 1);
+        page.setIsLastPage(pages == 0 || pageNum >= pages);
+        page.setHasPreviousPage(pageNum > 1);
+        page.setHasNextPage(pageNum < pages);
+        page.setPrePage(pageNum > 1 ? pageNum - 1 : 0);
+        page.setNextPage(pageNum < pages ? pageNum + 1 : 0);
     }
 
     private String displayName(Long userId) {
