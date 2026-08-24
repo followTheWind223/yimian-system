@@ -6,6 +6,7 @@ import com.yimian.system.service.AgentConversationAuditService;
 import com.yimian.system.vo.AgentConversationDetailVO;
 import com.yimian.system.vo.AgentConversationSessionPageVO;
 import com.yimian.system.vo.AgentConversationStatsVO;
+import com.yimian.system.vo.AgentUsageAnalyticsVO;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.UUID;
@@ -33,6 +34,34 @@ public class AgentConversationAuditServiceImpl implements AgentConversationAudit
     @Override
     public AgentConversationStatsVO getStats() {
         return get("/api/chat/admin/stats", AgentConversationStatsVO.class);
+    }
+
+    @Override
+    public AgentUsageAnalyticsVO getUsageAnalytics(int days) {
+        properties.assertReady();
+        try {
+            AgentUsageAnalyticsVO response = agentRestClient.get()
+                    .uri(builder -> builder
+                            .path("/api/chat/admin/analytics")
+                            .queryParam("days", days)
+                            .build())
+                    .header("X-Request-Id", newRequestId())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(AgentUsageAnalyticsVO.class);
+            if (response == null || response.summary() == null || response.tokenTrend() == null) {
+                throw AgentProxyException.badResponse();
+            }
+            return response;
+        } catch (AgentProxyException e) {
+            throw e;
+        } catch (RestClientResponseException e) {
+            throw mapStatus(e);
+        } catch (ResourceAccessException e) {
+            throw mapResourceAccess(e);
+        } catch (RestClientException e) {
+            throw AgentProxyException.unavailable();
+        }
     }
 
     @Override

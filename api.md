@@ -2214,3 +2214,77 @@ Agent 内部接口统一错误结构如下。Spring 不会将内部错误详情�
 成功响应 `data.session` 为会话项，`data.messages` 使用标准分页结构。消息项包含角色、正文、状态、模型、逐项 Token、`tokenEstimated`、延迟、成本、完成原因和错误码。会话不存在时返回 HTTP `404`、业务码 `1707`。
 
 Agent 内部对应接口为 `/api/chat/admin/stats`、`/api/chat/admin/sessions` 和 `/api/chat/admin/sessions/{sessionId}`，仅接受 Spring 内部认证，不对浏览器开放。
+
+### 25.7 AI 用量统计
+
+AI 用量统计与会话审计独立展示。统计数据从现有 Agent 消息和会话表实时聚合，不包含消息正文、请求载荷或内部 metadata。
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/agent/statistics/usage` |
+| 请求方式 | `GET` |
+| 权限要求 | `agent:statistics:view` |
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `days` | Integer | 否 | 7 | 统计周期，仅支持 `1`、`7`、`30`；1 天按小时聚合，7/30 天按天聚合 |
+
+成功响应 `data`：
+
+```json
+{
+  "days": 7,
+  "granularity": "day",
+  "startAt": "2026-08-18 00:00:00",
+  "endAt": "2026-08-24 20:30:00",
+  "summary": {
+    "sessionCount": 18,
+    "activeUserCount": 12,
+    "messageCount": 96,
+    "inputTokens": 24500,
+    "outputTokens": 31800,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 1200,
+    "totalTokens": 57500,
+    "estimatedMessageCount": 84,
+    "totalCostUsd": 0.13600000,
+    "averageLatencyMs": 862.5
+  },
+  "tokenTrend": [
+    {
+      "bucketStart": "2026-08-18 00:00:00",
+      "sessionCount": 3,
+      "messageCount": 12,
+      "inputTokens": 3200,
+      "outputTokens": 4100,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 100,
+      "totalTokens": 7400,
+      "totalCostUsd": 0.01800000
+    }
+  ],
+  "modelUsage": [
+    {
+      "modelProvider": "deepseek",
+      "modelName": "deepseek-chat",
+      "messageCount": 96,
+      "totalTokens": 57500,
+      "totalCostUsd": 0.13600000,
+      "averageLatencyMs": 862.5
+    }
+  ],
+  "sessionTypeUsage": [
+    {
+      "sessionType": "support",
+      "sessionCount": 10,
+      "messageCount": 64,
+      "totalTokens": 40200,
+      "totalCostUsd": 0.09200000
+    }
+  ]
+}
+```
+
+`tokenTrend` 会补齐时间范围内没有用量的小时或日期，前端可以直接绘图。`sessionCount` 和 `activeUserCount` 表示周期内实际产生消息的会话与用户数量。Agent 内部对应接口为 `/api/chat/admin/analytics?days=...`。
