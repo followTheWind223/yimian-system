@@ -2140,3 +2140,77 @@ Agent 内部接口统一错误结构如下。Spring 不会将内部错误详情�
 | `502` | `MODEL_CALL_FAILED` | Agent 调用模型失败 |
 | `503` | `SERVICE_MISCONFIGURED` | Agent 未配置内部令牌 |
 | `500` | `INTERNAL_ERROR` | Agent 未预期内部错误 |
+
+### 25.6 管理端会话与 Token 审计
+
+管理端接口只允许具备对应权限的管理员访问。Spring 使用内部认证调用 Agent 的只读审计接口，浏览器不会取得 Agent 内部令牌。响应不会包含 `session_key`、消息 `dedupe_key`、`payload` 或 `metadata`。
+
+#### 25.6.1 会话统计
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/agent/conversations/stats` |
+| 请求方式 | `GET` |
+| 权限要求 | `agent:conversation:list` |
+
+成功响应 `data`：
+
+```json
+{
+  "sessionCount": 12,
+  "activeSessionCount": 9,
+  "supportSessionCount": 7,
+  "quickSessionCount": 5,
+  "messageCount": 42,
+  "inputTokens": 3800,
+  "outputTokens": 6200,
+  "reasoningTokens": 0,
+  "cachedInputTokens": 0,
+  "totalTokens": 10000,
+  "estimatedMessageCount": 42,
+  "totalCostUsd": 0.00000000
+}
+```
+
+`estimatedMessageCount` 是 `tokenEstimated=true` 的消息条数，不是 Token 数量。当前本地 tokenizer 统计属于估算值，后续接入模型供应商 usage 后可记录精确值。
+
+#### 25.6.2 会话列表
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/agent/conversations` |
+| 请求方式 | `GET` |
+| 权限要求 | `agent:conversation:list` |
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | 否 | 1 | 页码，最小 1 |
+| `size` | Integer | 否 | 20 | 每页数量，1-100 |
+| `userId` | Long | 否 | - | 精确筛选用户 ID |
+| `sessionType` | String | 否 | - | `support` 或 `quick` |
+| `status` | Integer | 否 | - | `0`=活跃，`1`=归档 |
+
+成功响应分页字段固定为 `data.list`、`data.total`、`data.pageNum`、`data.pageSize`。会话列表默认包含快捷会话、归档会话和软删除后的审计记录。所有数据库 BIGINT ID 以字符串返回，避免 JavaScript 精度丢失。
+
+会话项包含 `id`、`userId`、`sessionType`、`scene`、`title`、`status`、`deleted`、`messageCount`、`inputTokens`、`outputTokens`、`reasoningTokens`、`cachedInputTokens`、`totalTokens`、`totalCostUsd`、`modelProvider`、`modelName`、`lastActiveAt`、`createdAt`、`archivedAt`、`deletedAt`。
+
+#### 25.6.3 会话消息详情
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/admin/agent/conversations/{sessionId}` |
+| 请求方式 | `GET` |
+| 权限要求 | `agent:conversation:view` |
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `page` | Integer | 否 | 1 | 消息页码 |
+| `size` | Integer | 否 | 100 | 每页消息数量，1-200 |
+
+成功响应 `data.session` 为会话项，`data.messages` 使用标准分页结构。消息项包含角色、正文、状态、模型、逐项 Token、`tokenEstimated`、延迟、成本、完成原因和错误码。会话不存在时返回 HTTP `404`、业务码 `1707`。
+
+Agent 内部对应接口为 `/api/chat/admin/stats`、`/api/chat/admin/sessions` 和 `/api/chat/admin/sessions/{sessionId}`，仅接受 Spring 内部认证，不对浏览器开放。

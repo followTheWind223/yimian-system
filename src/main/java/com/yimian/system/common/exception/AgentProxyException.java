@@ -45,4 +45,8 @@ public class AgentProxyException extends RuntimeException {
     public static AgentProxyException badResponse() {
         return new AgentProxyException(ResultCode.AGENT_BAD_RESPONSE, HttpStatus.BAD_GATEWAY, 0);
     }
+
+    public static AgentProxyException chatSessionNotFound() {
+        return new AgentProxyException(ResultCode.AGENT_CHAT_SESSION_NOT_FOUND, HttpStatus.NOT_FOUND, 0);
+    }
 }

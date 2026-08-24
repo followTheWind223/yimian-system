@@ -65,6 +65,7 @@ public enum ResultCode {
     AGENT_REQUEST_TIMEOUT(1704, "Agent 服务响应超时"),
     AGENT_RATE_LIMITED(1705, "Agent 请求过于频繁，请稍后重试"),
     AGENT_BAD_RESPONSE(1706, "Agent 服务返回异常"),
+    AGENT_CHAT_SESSION_NOT_FOUND(1707, "Agent 会话不存在"),
     ;
 
     private final Integer code;

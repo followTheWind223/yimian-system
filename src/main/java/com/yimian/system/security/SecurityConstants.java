@@ -37,7 +37,9 @@ public final class SecurityConstants {
             "blog:like", "blog:collect",
             "comment:view", "comment:create", "comment:like",
             // 个人中心
-            "self:profile", "self:change-password"
+            "self:profile", "self:change-password",
+            // Agent 会话审计
+            "agent:conversation:list", "agent:conversation:view"
     );
 
     private SecurityConstants() {}
