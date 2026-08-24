@@ -2092,7 +2092,7 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 | `done` | `{"reply":"...","session_id":"...","requestId":"..."}` | 对话完成；`session_id` 已由 Spring 改写为前端原始值 |
 | `error` | `{"error":"Agent 服务暂时不可用","requestId":"..."}` | 流建立后的失败事件，不暴露上游异常详情 |
 
-成功响应由 Controller 显式设置为 `text/event-stream`。如果在流建立前发生配置、限流或鉴权错误，后端仍按统一 JSON 错误结构和对应 HTTP 状态返回。Servlet 的 `ASYNC` 二次分发不重复鉴权，初始 HTTP 请求始终需要有效用户 JWT。
+成功响应由 Controller 显式设置为 `text/event-stream`，并返回 `Cache-Control: no-cache, no-transform` 与 `X-Accel-Buffering: no`，Spring 收到 Agent 的每个完整 SSE 事件后立即写出并刷新响应。如果在流建立前发生配置、限流或鉴权错误，后端仍按统一 JSON 错误结构和对应 HTTP 状态返回。Servlet 的 `ASYNC` 二次分发不重复鉴权，初始 HTTP 请求始终需要有效用户 JWT。
 
 ### 25.4 清理会话
 

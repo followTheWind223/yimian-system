@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -59,7 +58,7 @@ public class AgentController {
         StreamingResponseBody body = agentProxyService.streamChat(getCurrentUserId(), dto);
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_EVENT_STREAM)
-                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform")
                 .header(HttpHeaders.CONNECTION, "keep-alive")
                 .header("X-Accel-Buffering", "no")
                 .body(body);
