@@ -49,6 +49,7 @@ class AgentProxyServiceImplTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Request-Id", matchesPattern("[a-f0-9]{32}")))
                 .andExpect(content().string(containsString("\"user_id\":\"42\"")))
+                .andExpect(content().string(containsString("\"session_type\":\"support\"")))
                 .andExpect(content().string(containsString("\"message\":\"hello\"")))
                 .andExpect(content().string(containsString("\"stream\":false")))
                 .andExpect(content().string(not(containsString("\"session_id\":\"chat_public\""))))
@@ -59,6 +60,7 @@ class AgentProxyServiceImplTest {
 
         AgentChatDto dto = new AgentChatDto();
         dto.setSessionId("chat_public");
+        dto.setSessionType("support");
         dto.setMessage("hello");
         AgentChatVO response = service.chat(42L, dto);
 

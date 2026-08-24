@@ -1,6 +1,7 @@
 package com.yimian.system.common.utils;
 
 import com.yimian.system.config.AgentServiceProperties;
+import com.yimian.system.dto.AgentChatDto;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
@@ -18,6 +19,10 @@ public class AgentSessionKeyFactory {
     private final AgentServiceProperties properties;
 
     public String create(Long userId, String sessionId) {
+        return create(userId, AgentChatDto.SESSION_TYPE_SUPPORT, sessionId);
+    }
+
+    public String create(Long userId, String sessionType, String sessionId) {
         properties.assertReady();
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
@@ -25,7 +30,9 @@ public class AgentSessionKeyFactory {
                     properties.getInternalToken().trim().getBytes(StandardCharsets.UTF_8),
                     HMAC_ALGORITHM
             ));
-            byte[] digest = mac.doFinal((userId + ":" + sessionId).getBytes(StandardCharsets.UTF_8));
+            byte[] digest = mac.doFinal(
+                    (userId + ":" + sessionType + ":" + sessionId).getBytes(StandardCharsets.UTF_8)
+            );
             return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("无法生成 Agent 会话键", e);

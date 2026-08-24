@@ -66,10 +66,11 @@ public class AgentProxyServiceImpl implements AgentProxyService {
         rateLimiter.check(userId);
 
         String requestId = newRequestId();
-        String upstreamSessionId = sessionKeyFactory.create(userId, dto.getSessionId());
+        String upstreamSessionId = sessionKeyFactory.create(userId, dto.getSessionType(), dto.getSessionId());
         AgentUpstreamChatRequest request = new AgentUpstreamChatRequest(
                 String.valueOf(userId),
                 upstreamSessionId,
+                dto.getSessionType(),
                 dto.getMessage(),
                 false
         );
@@ -119,10 +120,11 @@ public class AgentProxyServiceImpl implements AgentProxyService {
         rateLimiter.check(userId);
 
         String requestId = newRequestId();
-        String upstreamSessionId = sessionKeyFactory.create(userId, dto.getSessionId());
+        String upstreamSessionId = sessionKeyFactory.create(userId, dto.getSessionType(), dto.getSessionId());
         AgentUpstreamChatRequest request = new AgentUpstreamChatRequest(
                 String.valueOf(userId),
                 upstreamSessionId,
+                dto.getSessionType(),
                 dto.getMessage(),
                 true
         );
@@ -235,6 +237,7 @@ public class AgentProxyServiceImpl implements AgentProxyService {
     public record AgentUpstreamChatRequest(
             @JsonProperty("user_id") String userId,
             @JsonProperty("session_id") String sessionId,
+            @JsonProperty("session_type") String sessionType,
             String message,
             boolean stream
     ) {

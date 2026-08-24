@@ -2036,7 +2036,9 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 
 浏览器不得直接调用 Agent。Agent 不开放跨域访问，`/api/chat/**` 仅接受 Spring 内部认证请求。
 
-用户会话不会直接以原始 `sessionId` 写入 Agent。Spring 使用内部令牌对 `userId:sessionId` 生成 HMAC 会话键，保证不同用户之间的 Agent 上下文隔离。
+用户会话不会直接以原始 `sessionId` 写入 Agent。Spring 使用内部令牌对 `userId:sessionType:sessionId` 生成 HMAC 会话键，保证不同用户、不同会话类型之间的 Agent 上下文隔离。
+
+Agent 会话和消息持久化在 MySQL 的 `agent_chat_session`、`agent_chat_message` 表中，相关迁移为 `agent/sql/002-add-chat-session-type.sql`。`session_type=support` 表示用户正式会话，可进入后续用户记忆；`session_type=quick` 表示右下角快捷助手会话，消息仍落库供系统审计，但不会进入用户正式会话列表或长期记忆。
 
 ### 25.2 非流式对话
 
@@ -2052,6 +2054,7 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 ```json
 {
   "sessionId": "chat_01JABCDEF",
+  "sessionType": "support",
   "message": "请根据知识库解释 Java 线程池的核心参数"
 }
 ```
@@ -2059,6 +2062,7 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `sessionId` | String | 是 | 1-64 位，只能包含字母、数字、下划线和连字符；同一会话复用 |
+| `sessionType` | String | 否 | `support`=用户正式会话，`quick`=系统可见快捷对话；默认 `support` |
 | `message` | String | 是 | 用户消息，最长 4000 个字符 |
 
 成功响应 `data`：
@@ -2082,7 +2086,7 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 | Content-Type | `application/json` |
 | Accept | `text/event-stream` |
 
-请求体与非流式接口相同。响应事件：
+请求体与非流式接口相同。浏览器应发送 `Accept: text/event-stream, application/json`，以便成功时消费 SSE、流建立前失败时读取统一 JSON 错误。响应事件：
 
 | event | data | 说明 |
 |------|------|------|

@@ -17,9 +17,11 @@ class AgentSessionKeyFactoryTest {
         String first = factory.create(1001L, "chat_demo");
         String same = factory.create(1001L, "chat_demo");
         String anotherUser = factory.create(1002L, "chat_demo");
+        String quick = factory.create(1001L, "quick", "chat_demo");
 
         assertThat(first).isEqualTo(same);
         assertThat(first).isNotEqualTo(anotherUser);
+        assertThat(first).isNotEqualTo(quick);
         assertThat(first).doesNotContain("1001", "chat_demo");
     }
 }
