@@ -22,7 +22,7 @@ public class AgentSessionKeyFactory {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(new SecretKeySpec(
-                    properties.getInternalToken().getBytes(StandardCharsets.UTF_8),
+                    properties.getInternalToken().trim().getBytes(StandardCharsets.UTF_8),
                     HMAC_ALGORITHM
             ));
             byte[] digest = mac.doFinal((userId + ":" + sessionId).getBytes(StandardCharsets.UTF_8));

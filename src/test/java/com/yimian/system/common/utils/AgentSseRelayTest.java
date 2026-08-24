@@ -31,11 +31,18 @@ class AgentSseRelayTest {
                 new ByteArrayInputStream(upstream.getBytes(StandardCharsets.UTF_8)),
                 output,
                 objectMapper,
-                "chat_public"
+                "chat_public",
+                "request-0123456789"
         );
 
         String result = output.toString(StandardCharsets.UTF_8);
-        assertThat(result).contains("event: token", "hello", "chat_public", "Agent 服务暂时不可用");
+        assertThat(result).contains(
+                "event: token",
+                "hello",
+                "chat_public",
+                "Agent 服务暂时不可用",
+                "request-0123456789"
+        );
         assertThat(result).doesNotContain("internal-secret-session", "stack trace", "provider details");
     }
 }

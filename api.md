@@ -2012,18 +2012,29 @@ Agent 服务部署在独立服务器。浏览器只访问 Spring 后端的 `/api
 
 ### 25.1 部署配置
 
+Spring 后端配置：
+
 | 环境变量 | 默认值 | 说明 |
 |------|------|------|
 | `AGENT_SERVICE_ENABLED` | `false` | 是否启用 Agent 代理；未启用时接口返回 HTTP 503 |
 | `AGENT_SERVICE_BASE_URL` | `http://127.0.0.1:8000` | Agent 服务根地址，可配置为独立服务器 IP，例如 `http://10.0.0.8:8000` |
-| `AGENT_SERVICE_INTERNAL_TOKEN` | 空 | Spring 与 Agent 之间的内部 Bearer Token；启用 Agent 时必填 |
+| `AGENT_SERVICE_INTERNAL_TOKEN` | 空 | Spring 与 Agent 之间的内部 Bearer Token；启用 Agent 时必填且至少 32 个字符 |
 | `AGENT_SERVICE_CONNECT_TIMEOUT` | `5s` | 建立连接超时 |
 | `AGENT_SERVICE_READ_TIMEOUT` | `120s` | 非流式请求读取超时 |
 | `AGENT_SERVICE_STREAM_READ_TIMEOUT` | `10m` | SSE 流式请求读取超时 |
 | `AGENT_SERVICE_RATE_LIMIT` | `20` | 单用户在一个窗口内最多发起的对话数 |
 | `AGENT_SERVICE_RATE_WINDOW` | `1m` | Redis 限流窗口 |
 
-Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Yimian-Service: system` 和 `X-Request-Id`。生产环境应使用 HTTPS、内网或 VPN，并在 Agent 服务器防火墙中仅允许 Spring 服务器访问 Agent 端口。
+Agent 服务配置：
+
+| 环境变量 | 默认值 | 说明 |
+|------|------|------|
+| `AGENT_INTERNAL_TOKEN` | 空 | 必须与 Spring 的 `AGENT_SERVICE_INTERNAL_TOKEN` 完全一致且至少 32 个字符；无效时 `/api/chat/**` 拒绝服务 |
+| `AGENT_TRUSTED_SERVICE` | `system` | Agent 要求的 `X-Yimian-Service` 请求头值 |
+
+Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Yimian-Service: system` 和 `X-Request-Id`。`X-Request-Id` 为 16-64 位字母、数字、下划线或连字符，当前 Spring 生成 32 位十六进制值。Agent 使用常量时间比较内部令牌，任一认证头不合法都会拒绝请求。生产环境应使用 HTTPS、内网或 VPN，并在 Agent 服务器防火墙中仅允许 Spring 服务器访问 Agent 端口。
+
+浏览器不得直接调用 Agent。Agent 不开放跨域访问，`/api/chat/**` 仅接受 Spring 内部认证请求。
 
 用户会话不会直接以原始 `sessionId` 写入 Agent。Spring 使用内部令牌对 `userId:sessionId` 生成 HMAC 会话键，保证不同用户之间的 Agent 上下文隔离。
 
@@ -2077,8 +2088,8 @@ Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Y
 |------|------|------|
 | `meta` | `{"requestId":"...","sessionId":"..."}` | Spring 首先返回的请求追踪信息 |
 | `token` | `{"content":"..."}` | 模型增量文本 |
-| `tool_call` | `{"name":"...","args":{}}` | Agent 工具调用提示 |
-| `done` | `{"reply":"...","session_id":"..."}` | 对话完成；`session_id` 已由 Spring 改写为前端原始值 |
+| `tool_call` | `{"name":"...","args":{}}` | Agent 工具调用提示；基础对话阶段不会产生 |
+| `done` | `{"reply":"...","session_id":"...","requestId":"..."}` | 对话完成；`session_id` 已由 Spring 改写为前端原始值 |
 | `error` | `{"error":"Agent 服务暂时不可用","requestId":"..."}` | 流建立后的失败事件，不暴露上游异常详情 |
 
 ### 25.4 清理会话
@@ -2101,3 +2112,25 @@ Spring 只会清理当前登录用户对应的 HMAC 会话，不允许跨用户�
 | `503` | `1702` | Agent 服务配置不完整 | 启用后未配置内部令牌 |
 | `503` | `1703` | Agent 服务暂时不可用 | Agent 无法连接、上游 5xx 或 Redis 限流服务不可用 |
 | `504` | `1704` | Agent 服务响应超时 | 连接成功但在配置时间内没有完成响应 |
+
+Agent 内部接口统一错误结构如下。Spring 不会将内部错误详情直接透传给浏览器，而是映射为上表中的公开错误。
+
+```json
+{
+  "error": {
+    "code": "UNAUTHORIZED_SERVICE",
+    "message": "Service authentication failed",
+    "request_id": "7bd7bf1d73674930b08f148b4a5dc11b"
+  }
+}
+```
+
+| Agent HTTP 状态 | 内部错误码 | 场景 |
+|------|------|------|
+| `400` | `INVALID_REQUEST_ID` | `X-Request-Id` 缺失或格式错误 |
+| `401` | `UNAUTHORIZED_SERVICE` | 内部 Bearer Token 缺失或错误 |
+| `403` | `UNTRUSTED_SERVICE` | `X-Yimian-Service` 不受信任 |
+| `422` | `VALIDATION_ERROR` | 请求体或路径参数不符合内部契约 |
+| `502` | `MODEL_CALL_FAILED` | Agent 调用模型失败 |
+| `503` | `SERVICE_MISCONFIGURED` | Agent 未配置内部令牌 |
+| `500` | `INTERNAL_ERROR` | Agent 未预期内部错误 |

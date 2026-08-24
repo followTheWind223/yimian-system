@@ -31,14 +31,15 @@ public final class AgentSseRelay {
     public static void relay(InputStream input,
                              OutputStream output,
                              ObjectMapper objectMapper,
-                             String publicSessionId) throws IOException {
+                             String publicSessionId,
+                             String requestId) throws IOException {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(input, StandardCharsets.UTF_8))) {
             List<String> eventLines = new ArrayList<>();
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isEmpty()) {
-                    writeEventLines(output, objectMapper, eventLines, publicSessionId);
+                    writeEventLines(output, objectMapper, eventLines, publicSessionId, requestId);
                     eventLines.clear();
                     output.flush();
                 } else {
@@ -46,7 +47,7 @@ public final class AgentSseRelay {
                 }
             }
             if (!eventLines.isEmpty()) {
-                writeEventLines(output, objectMapper, eventLines, publicSessionId);
+                writeEventLines(output, objectMapper, eventLines, publicSessionId, requestId);
                 output.flush();
             }
         }
@@ -55,7 +56,8 @@ public final class AgentSseRelay {
     private static void writeEventLines(OutputStream output,
                                         ObjectMapper objectMapper,
                                         List<String> lines,
-                                        String publicSessionId) throws IOException {
+                                        String publicSessionId,
+                                        String requestId) throws IOException {
         if (lines.isEmpty()) {
             return;
         }
@@ -74,7 +76,10 @@ public final class AgentSseRelay {
                 ));
             } else if (line.startsWith("data:") && "error".equals(event)) {
                 writeLine(output, "data: " + objectMapper.writeValueAsString(
-                        Map.of("error", "Agent 服务暂时不可用")
+                        Map.of(
+                                "error", "Agent 服务暂时不可用",
+                                "requestId", requestId
+                        )
                 ));
             } else {
                 writeLine(output, line);

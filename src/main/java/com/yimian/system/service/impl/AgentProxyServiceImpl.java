@@ -150,7 +150,8 @@ public class AgentProxyServiceImpl implements AgentProxyService {
                                     clientResponse.getBody(),
                                     output,
                                     objectMapper,
-                                    dto.getSessionId()
+                                    dto.getSessionId(),
+                                    requestId
                             );
                             return null;
                         });

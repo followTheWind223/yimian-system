@@ -41,7 +41,7 @@ public class AgentServiceProperties {
         if (!enabled) {
             throw AgentProxyException.disabled();
         }
-        if (!StringUtils.hasText(internalToken)) {
+        if (!StringUtils.hasText(internalToken) || internalToken.trim().length() < 32) {
             throw AgentProxyException.misconfigured();
         }
     }

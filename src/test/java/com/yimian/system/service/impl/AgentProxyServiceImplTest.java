@@ -2,9 +2,11 @@ package com.yimian.system.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -45,6 +47,7 @@ class AgentProxyServiceImplTest {
 
         server.expect(requestTo("http://agent.test/api/chat"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Request-Id", matchesPattern("[a-f0-9]{32}")))
                 .andExpect(content().string(containsString("\"user_id\":\"42\"")))
                 .andExpect(content().string(containsString("\"message\":\"hello\"")))
                 .andExpect(content().string(containsString("\"stream\":false")))
