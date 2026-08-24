@@ -19,6 +19,7 @@ import com.yimian.system.mapper.KnowledgeMapper;
 import com.yimian.system.mapper.UserMapper;
 import com.yimian.system.service.CommentService;
 import com.yimian.system.service.HotDataService;
+import com.yimian.system.service.MentionService;
 import com.yimian.system.service.NotificationService;
 import com.yimian.system.vo.CommentLikeVO;
 import com.yimian.system.vo.CommentVO;
@@ -53,6 +54,7 @@ public class CommentServiceImpl implements CommentService {
     private final BlogMapper blogMapper;
     private final HotDataService hotDataService;
     private final NotificationService notificationService;
+    private final MentionService mentionService;
 
     @Override
     public PageInfo<CommentVO> list(CommentQueryDto query, Long currentUserId) {
@@ -181,6 +183,8 @@ public class CommentServiceImpl implements CommentService {
                     "comment_reply", userId, replyToUserId,
                     targetType, targetId, title, cnt, null);
         }
+
+        mentionService.notifyMentions(userId, content, targetType, targetId, "comment", comment.getId());
 
         return toVO(comment, users, Collections.emptySet());
     }

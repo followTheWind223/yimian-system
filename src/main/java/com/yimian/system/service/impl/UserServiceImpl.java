@@ -13,19 +13,23 @@ import com.yimian.system.mapper.UserFollowMapper;
 import com.yimian.system.mapper.UserMapper;
 import com.yimian.system.mapper.UserRoleMapper;
 import com.yimian.system.security.JwtUtil;
+import com.yimian.system.service.EmailCodeService;
 import com.yimian.system.service.UserService;
 import com.yimian.system.vo.LoginVO;
 import com.yimian.system.vo.UserVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -39,6 +43,7 @@ public class UserServiceImpl implements UserService {
     private final RoleMapper roleMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final EmailCodeService emailCodeService;
     private final boolean captchaEnabled;
 
     public UserServiceImpl(UserMapper userMapper,
@@ -47,6 +52,7 @@ public class UserServiceImpl implements UserService {
                            RoleMapper roleMapper,
                            PasswordEncoder passwordEncoder,
                            JwtUtil jwtUtil,
+                           EmailCodeService emailCodeService,
                            @Value("${captcha.enabled}") boolean captchaEnabled) {
         this.userMapper = userMapper;
         this.userFollowMapper = userFollowMapper;
@@ -54,10 +60,9 @@ public class UserServiceImpl implements UserService {
         this.roleMapper = roleMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.emailCodeService = emailCodeService;
         this.captchaEnabled = captchaEnabled;
     }
-
-    // ==================== 认证 ====================
 
     @Override
     public LoginVO login(LoginDto dto) {
@@ -65,15 +70,16 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        if (user.getStatus() != 1) {
+        if (user.getStatus() == null || user.getStatus() != 1) {
             throw new BusinessException(ResultCode.ACCOUNT_DISABLED);
         }
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.PASSWORD_ERROR);
         }
         if (captchaEnabled) {
-            // TODO: 验证码校验逻辑
+            // Reserved for image captcha verification.
         }
+
         List<String> roles = userMapper.selectRoleCodesByUserId(user.getId());
         List<String> permissions = getPermissions(user.getId(), roles);
 
@@ -85,9 +91,7 @@ public class UserServiceImpl implements UserService {
         String accessToken = jwtUtil.generateToken(user.getUsername(), claims);
         String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
 
-        userMapper.updateLoginInfo(user.getId(),
-                java.time.LocalDateTime.now(), "127.0.0.1");
-
+        userMapper.updateLoginInfo(user.getId(), LocalDateTime.now(), "127.0.0.1");
         log.info("用户登录成功: {}", user.getUsername());
 
         return LoginVO.builder()
@@ -117,37 +121,28 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserVO register(RegisterDto dto) {
-        User existUser = userMapper.selectByUsername(dto.getUsername());
-        if (existUser != null) {
-            throw new BusinessException(ResultCode.USERNAME_EXISTS);
-        }
-        if (dto.getEmail() != null && !dto.getEmail().isEmpty()) {
-            User existEmail = userMapper.selectByEmail(dto.getEmail());
-            if (existEmail != null) {
-                throw new BusinessException(ResultCode.EMAIL_EXISTS);
-            }
-        }
+        String email = normalizeEmail(dto.getEmail());
+        ensureUsernameAvailable(dto.getUsername());
+        ensureEmailAvailable(email, null);
+        emailCodeService.verifyRegisterCode(email, dto.getEmailCode());
+
         User user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
-        user.setNickname(dto.getNickname() != null ? dto.getNickname() : dto.getUsername());
+        user.setEmail(email);
+        user.setPhone(normalizeBlank(dto.getPhone()));
+        user.setNickname(dto.getNickname() != null && !dto.getNickname().isBlank()
+                ? dto.getNickname().trim()
+                : dto.getUsername());
         user.setStatus(1);
         user.setDeleted(0);
 
         try {
             userMapper.insert(user);
-        } catch (org.springframework.dao.DuplicateKeyException e) {
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("uk_username")) {
-                throw new BusinessException(ResultCode.USERNAME_EXISTS);
-            }
-            if (msg != null && msg.contains("uk_email")) {
-                throw new BusinessException(ResultCode.EMAIL_EXISTS);
-            }
-            throw new BusinessException(ResultCode.ERROR, "数据重复");
+        } catch (DuplicateKeyException e) {
+            throwDuplicateUserException(e);
         }
 
         userMapper.insertUserRole(user.getId(), "ROLE_USER");
@@ -155,7 +150,22 @@ public class UserServiceImpl implements UserService {
         return toVO(user);
     }
 
-    // ==================== 管理员：用户 CRUD ====================
+    @Override
+    @Transactional
+    public void forgotPasswordReset(ForgotPasswordResetDto dto) {
+        String email = normalizeEmail(dto.getEmail());
+        User user = userMapper.selectByEmail(email);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+        if (user.getStatus() == null || user.getStatus() != 1) {
+            throw new BusinessException(ResultCode.ACCOUNT_DISABLED);
+        }
+        emailCodeService.verifyResetPasswordCode(email, dto.getEmailCode());
+        user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        userMapper.updateById(user);
+        log.info("用户通过邮箱验证码重置密码成功: userId={}", user.getId());
+    }
 
     @Override
     public PageInfo<UserVO> listUsers(int page, int size, String keyword, String role, Integer status) {
@@ -240,39 +250,42 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public List<UserVO> listMentionableFriends(Long currentUserId, String keyword, Integer limit) {
+        if (currentUserId == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST);
+        }
+        int safeLimit = limit != null && limit > 0 ? Math.min(limit, 20) : 10;
+        String normalizedKeyword = normalizeBlank(keyword);
+        return userFollowMapper.selectMutualFollowUsers(currentUserId, normalizedKeyword, safeLimit)
+                .stream()
+                .map(user -> toPublicVO(user, currentUserId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public UserVO createUser(UserCreateDto dto) {
-        User existUser = userMapper.selectByUsername(dto.getUsername());
-        if (existUser != null) {
-            throw new BusinessException(ResultCode.USERNAME_EXISTS);
-        }
-        if (dto.getEmail() != null && !dto.getEmail().isEmpty()) {
-            User existEmail = userMapper.selectByEmail(dto.getEmail());
-            if (existEmail != null) {
-                throw new BusinessException(ResultCode.EMAIL_EXISTS);
-            }
-        }
+        ensureUsernameAvailable(dto.getUsername());
+        String email = normalizeOptionalEmail(dto.getEmail());
+        ensureEmailAvailable(email, null);
+
         User user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
-        user.setNickname(dto.getNickname() != null ? dto.getNickname() : dto.getUsername());
+        user.setEmail(email);
+        user.setPhone(normalizeBlank(dto.getPhone()));
+        user.setNickname(dto.getNickname() != null && !dto.getNickname().isBlank()
+                ? dto.getNickname().trim()
+                : dto.getUsername());
         user.setStatus(1);
         user.setDeleted(0);
 
         try {
             userMapper.insert(user);
-        } catch (org.springframework.dao.DuplicateKeyException e) {
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("uk_username"))
-                throw new BusinessException(ResultCode.USERNAME_EXISTS);
-            if (msg != null && msg.contains("uk_email"))
-                throw new BusinessException(ResultCode.EMAIL_EXISTS);
-            throw new BusinessException(ResultCode.ERROR, "数据重复");
+        } catch (DuplicateKeyException e) {
+            throwDuplicateUserException(e);
         }
 
-        // 分配角色
         if (dto.getRoleCodes() != null && !dto.getRoleCodes().isEmpty()) {
             assignRoleCodes(user.getId(), dto.getRoleCodes());
         } else {
@@ -290,10 +303,20 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        if (dto.getEmail() != null) user.setEmail(dto.getEmail());
-        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
-        if (dto.getNickname() != null) user.setNickname(dto.getNickname());
-        if (dto.getStatus() != null) user.setStatus(dto.getStatus());
+        if (dto.getEmail() != null) {
+            String email = normalizeOptionalEmail(dto.getEmail());
+            ensureEmailAvailable(email, id);
+            user.setEmail(email);
+        }
+        if (dto.getPhone() != null) {
+            user.setPhone(normalizeBlank(dto.getPhone()));
+        }
+        if (dto.getNickname() != null) {
+            user.setNickname(dto.getNickname());
+        }
+        if (dto.getStatus() != null) {
+            user.setStatus(dto.getStatus());
+        }
         userMapper.updateById(user);
         log.info("管理员编辑用户成功: id={}", id);
         return toVO(user);
@@ -333,8 +356,6 @@ public class UserServiceImpl implements UserService {
         log.info("用户角色分配成功: userId={}, roles={}", userId, dto.getRoleCodes());
     }
 
-    // ==================== 个人中心 ====================
-
     @Override
     @Transactional
     public UserVO updateProfile(Long userId, ProfileUpdateDto dto) {
@@ -342,18 +363,22 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        // 邮箱唯一校验
-        if (dto.getEmail() != null && !dto.getEmail().isEmpty()
-                && !dto.getEmail().equals(user.getEmail())) {
-            User existEmail = userMapper.selectByEmail(dto.getEmail());
-            if (existEmail != null) {
-                throw new BusinessException(ResultCode.EMAIL_EXISTS);
+        if (dto.getEmail() != null) {
+            String email = normalizeOptionalEmail(dto.getEmail());
+            if ((email == null && user.getEmail() != null) || (email != null && !email.equals(user.getEmail()))) {
+                ensureEmailAvailable(email, userId);
+                user.setEmail(email);
             }
-            user.setEmail(dto.getEmail());
         }
-        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
-        if (dto.getNickname() != null) user.setNickname(dto.getNickname());
-        if (dto.getAvatar() != null) user.setAvatar(dto.getAvatar());
+        if (dto.getPhone() != null) {
+            user.setPhone(normalizeBlank(dto.getPhone()));
+        }
+        if (dto.getNickname() != null) {
+            user.setNickname(dto.getNickname());
+        }
+        if (dto.getAvatar() != null) {
+            user.setAvatar(dto.getAvatar());
+        }
         userMapper.updateById(user);
         log.info("用户个人信息更新成功: userId={}", userId);
         return toVO(user);
@@ -366,7 +391,6 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        // 验证旧密码
         if (!passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.PASSWORD_ERROR);
         }
@@ -374,8 +398,6 @@ public class UserServiceImpl implements UserService {
         userMapper.updateById(user);
         log.info("用户密码修改成功: userId={}", userId);
     }
-
-    // ==================== 私有方法 ====================
 
     private UserVO toVO(User user) {
         UserVO vo = new UserVO();
@@ -406,9 +428,6 @@ public class UserServiceImpl implements UserService {
                 && userFollowMapper.selectActive(currentUserId, vo.getId()) != null);
     }
 
-    /**
-     * ADMIN 用内存常量（不查 DB），其他角色按关联表查询
-     */
     private void ensureUserExists(Long id) {
         User user = userMapper.selectById(id);
         if (user == null) {
@@ -451,12 +470,54 @@ public class UserServiceImpl implements UserService {
         if (roleCodes != null && !roleCodes.isEmpty()) {
             List<Long> roleIds = roleCodes.stream()
                     .map(code -> {
-                        Role r = roleMapper.selectByRoleCode(code);
-                        if (r == null) throw new BusinessException(ResultCode.ROLE_NOT_FOUND);
-                        return r.getId();
+                        Role role = roleMapper.selectByRoleCode(code);
+                        if (role == null) {
+                            throw new BusinessException(ResultCode.ROLE_NOT_FOUND);
+                        }
+                        return role.getId();
                     })
                     .collect(Collectors.toList());
             userRoleMapper.insertBatch(userId, roleIds);
         }
+    }
+
+    private void ensureUsernameAvailable(String username) {
+        if (userMapper.selectByUsername(username) != null) {
+            throw new BusinessException(ResultCode.USERNAME_EXISTS);
+        }
+    }
+
+    private void ensureEmailAvailable(String email, Long currentUserId) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        User existing = userMapper.selectByEmail(email);
+        if (existing != null && !existing.getId().equals(currentUserId)) {
+            throw new BusinessException(ResultCode.EMAIL_EXISTS);
+        }
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeOptionalEmail(String email) {
+        String normalized = normalizeEmail(email);
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private String normalizeBlank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void throwDuplicateUserException(DuplicateKeyException e) {
+        String msg = e.getMessage();
+        if (msg != null && msg.contains("uk_username")) {
+            throw new BusinessException(ResultCode.USERNAME_EXISTS);
+        }
+        if (msg != null && (msg.contains("uk_email") || msg.contains("uk_user_email"))) {
+            throw new BusinessException(ResultCode.EMAIL_EXISTS);
+        }
+        throw new BusinessException(ResultCode.ERROR, "数据重复");
     }
 }

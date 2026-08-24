@@ -24,4 +24,8 @@ public interface UserFollowMapper extends BaseMapper<UserFollow> {
     List<User> selectFollowingUsers(@Param("userId") Long userId);
 
     List<User> selectFollowerUsers(@Param("userId") Long userId);
+
+    List<User> selectMutualFollowUsers(@Param("userId") Long userId,
+                                       @Param("keyword") String keyword,
+                                       @Param("limit") int limit);
 }

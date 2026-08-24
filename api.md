@@ -243,7 +243,7 @@
 ```json
 {
   "username": "zhangsan",
-  "password": "123456",
+  "password": "Aa123456",
   "email": "zhangsan@example.com",
   "phone": "13800138000",
   "nickname": "张三"
@@ -253,7 +253,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `username` | String | ✅ | 用户名，唯一，4-64 字符 |
-| `password` | String | ✅ | 密码，6-32 字符 |
+| `password` | String | ✅ | 密码，6-32 字符，必须至少包含一个大写字母、一个小写字母和一个数字 |
 | `email` | String | | 邮箱，格式校验 |
 | `phone` | String | | 手机号，11 位 |
 | `nickname` | String | | 昵称，不传则默认为用户名 |
@@ -515,12 +515,13 @@
 | **请求方式** | `PUT` |
 
 ```json
-{ "oldPassword": "旧密码", "newPassword": "新密码" }
+{ "oldPassword": "旧密码", "newPassword": "Aa123456" }
 ```
 
 | 失败场景 | code | 说明 |
 |------|------|------|
 | 旧密码错误 | 1004 | 密码错误 |
+| 参数校验失败 | 400 | newPassword 必须为 6-32 位，且至少包含一个大写字母、一个小写字母和一个数字 |
 
 
 ---
@@ -564,7 +565,7 @@
 ```json
 {
   "username": "newuser",
-  "password": "123456",
+  "password": "Aa123456",
   "email": "new@example.com",
   "phone": "13800000000",
   "nickname": "新用户",
@@ -575,7 +576,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `username` | String | ✅ | 用户名 |
-| `password` | String | ✅ | 密码 |
+| `password` | String | ✅ | 密码，6-32 位，必须至少包含一个大写字母、一个小写字母和一个数字 |
 | `roleCodes` | Array | | 角色编码列表，不传默认 `ROLE_USER` |
 
 ### 4.4 编辑用户
@@ -599,10 +600,10 @@
 | **请求方式** | `PUT` |
 
 ```json
-{ "newPassword": "新密码" }
+{ "newPassword": "Aa123456" }
 ```
 
-管理员无需旧密码即可重置用户密码。
+管理员无需旧密码即可重置用户密码。`newPassword` 必须为 6-32 位，且至少包含一个大写字母、一个小写字母和一个数字。
 
 ### 4.6 删除用户
 
@@ -1863,3 +1864,142 @@ Query 参数：
 | `creatorName` | String | 发布人显示名 |
 | `createdAt` | String | 创建时间 |
 | `updatedAt` | String | 更新时间 |
+---
+
+## 23. 邮箱验证码注册与忘记密码
+
+> 相关 SQL：`system/sql/38-user-email-unique.sql`
+
+### 23.1 发送注册邮箱验证码
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/auth/email-code/register` |
+| 请求方式 | `POST` |
+| 认证要求 | 无需认证 |
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+邮箱必须未被注册。验证码写入 Redis，key 形如 `auth:email-code:register:{email}`，有效期 5 分钟，同邮箱同用途发送冷却 60 秒。
+
+### 23.2 邮箱验证码注册
+
+`/api/auth/register` 的请求体更新为：
+
+```json
+{
+  "username": "zhangsan",
+  "password": "Aa123456",
+  "email": "zhangsan@example.com",
+  "emailCode": "123456",
+  "phone": "13800138000",
+  "nickname": "张三"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `username` | String | 是 | 用户名，4-64 位，全局唯一 |
+| `password` | String | 是 | 密码，6-32 位，必须至少包含一个大写字母、一个小写字母和一个数字，BCrypt 加密存储 |
+| `email` | String | 是 | 邮箱，全局唯一 |
+| `emailCode` | String | 是 | 6 位邮箱验证码，注册成功后删除 |
+| `phone` | String | 否 | 手机号，最长 20 位 |
+| `nickname` | String | 否 | 昵称，不传则默认用户名 |
+
+### 23.3 发送重置密码邮箱验证码
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/auth/email-code/reset-password` |
+| 请求方式 | `POST` |
+| 认证要求 | 无需认证 |
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+邮箱必须对应一个启用中的账号。验证码写入 Redis，key 形如 `auth:email-code:reset-password:{email}`，有效期 5 分钟，同邮箱同用途发送冷却 60 秒。
+
+### 23.4 邮箱验证码重置密码
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/auth/password/reset` |
+| 请求方式 | `POST` |
+| 认证要求 | 无需认证 |
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com",
+  "emailCode": "123456",
+  "newPassword": "NewPass123"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `email` | String | 是 | 注册邮箱 |
+| `emailCode` | String | 是 | 6 位邮箱验证码，重置成功后删除 |
+| `newPassword` | String | 是 | 新密码，6-32 位，必须至少包含一个大写字母、一个小写字母和一个数字 |
+
+### 23.5 失败响应补充
+
+| code | message | 触发场景 |
+|------|------|------|
+| `1002` | 邮箱已被注册 | 注册验证码发送或注册时邮箱重复 |
+| `1003` | 用户不存在 | 找回密码邮箱不存在 |
+| `1005` | 账号已被禁用 | 找回密码邮箱对应账号未启用 |
+| `1008` | 邮箱验证码错误或已过期 | 验证码不存在、过期或不匹配 |
+| `1009` | 验证码发送过于频繁，请稍后再试 | 60 秒冷却内重复发送 |
+
+---
+
+## 24. @ 好友提醒
+
+好友定义为互相关注：当前用户关注对方，且对方也关注当前用户。@ 提醒复用通知表 `sys_notification`，不新增数据库表。
+
+### 24.1 查询可 @ 的互关好友
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/user/mentionable-friends` |
+| 请求方式 | `GET` |
+| 权限要求 | `user:view-public` |
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `keyword` | String | 否 | - | 按 `username` 或 `nickname` 模糊搜索 |
+| `limit` | Integer | 否 | 10 | 最大 20 |
+
+成功响应 `data` 为 `UserVO[]`，字段同公开用户资料，`email`、`phone`、`roles`、`permissions` 等敏感字段不会返回。
+
+### 24.2 @ 通知规则
+
+评论、博客正文、题目正文中输入 `@昵称` 或 `@username` 时，后端会解析文本并只给互关好友创建通知。非互关用户即使被写进文本，也不会收到通知。
+
+通知字段：
+
+| 字段 | 值 |
+|------|-----|
+| `type` | `mention` |
+| `senderId` | 发起 @ 的用户 ID |
+| `receiverId` | 被 @ 的互关好友 ID |
+| `targetType` | `knowledge` 或 `blog` |
+| `targetId` | 对应题目或博客 ID |
+| `extra` | JSON 字符串，包含 `sourceType`、`sourceId`、`targetType`、`targetId`；其中 ID 字段按字符串写入，避免前端长整型精度丢失 |
+
+消息中心可通过 `/api/notifications?type=mention&page=1&size=20` 查看 “@我” 列表。

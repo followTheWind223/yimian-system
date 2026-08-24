@@ -55,7 +55,8 @@ public class OperationLogAspect {
     private static final Set<String> SENSITIVE_KEYWORDS = Set.of(
             "password", "passwd", "pwd", "secret", "token",
             "oldpassword", "newpassword", "confirmpassword",
-            "accesstoken", "refreshtoken", "authorization"
+            "accesstoken", "refreshtoken", "authorization",
+            "emailcode", "verificationcode", "captcha"
     );
 
     @Around("@annotation(opLog)")

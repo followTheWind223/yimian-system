@@ -12,6 +12,7 @@ import com.yimian.system.entity.*;
 import com.yimian.system.mapper.*;
 import com.yimian.system.service.BlogService;
 import com.yimian.system.service.HotDataService;
+import com.yimian.system.service.MentionService;
 import com.yimian.system.vo.BlogVO;
 import com.yimian.system.vo.BlogVO.RefVO;
 import com.yimian.system.vo.BlogVO.TopicSimple;
@@ -45,6 +46,7 @@ public class BlogServiceImpl implements BlogService {
     private final BlogCollectMapper blogCollectMapper;
     private final FavoriteItemMapper favoriteItemMapper;
     private final HotDataService hotDataService;
+    private final MentionService mentionService;
 
     @Override
     @Transactional
@@ -78,6 +80,7 @@ public class BlogServiceImpl implements BlogService {
         List<Long> topicIds = normalizeTopicIds(dto.getTopicIds());
         saveTopicRelations(blog.getId(), topicIds);
         syncTopicUsage(Collections.emptyList(), topicIds, false, isPublished(blog));
+        notifyPublishedMentions(blog, false);
 
         log.info("Blog created: id={}, userId={}, status={}", blog.getId(), userId, blog.getStatus());
         return toVO(blog);
@@ -131,6 +134,7 @@ public class BlogServiceImpl implements BlogService {
 
         blogMapper.updateById(blog);
         syncTopicUsage(previousTopicIds, nextTopicIds, wasPublished, isPublished(blog));
+        notifyPublishedMentions(blog, wasPublished);
         log.info("Blog updated: id={}, userId={}", id, userId);
         return toVO(blog);
     }
@@ -288,6 +292,7 @@ public class BlogServiceImpl implements BlogService {
         }
         List<Long> topicIds = splitTopicIds(blog.getTopicIds());
         syncTopicUsage(topicIds, topicIds, wasPublished, isPublished(blog));
+        notifyPublishedMentions(blog, wasPublished);
         return toVO(blog);
     }
 
@@ -405,6 +410,13 @@ public class BlogServiceImpl implements BlogService {
 
     private boolean isPublished(Blog blog) {
         return blog != null && Integer.valueOf(STATUS_PUBLISHED).equals(blog.getStatus());
+    }
+
+    private void notifyPublishedMentions(Blog blog, boolean wasPublished) {
+        if (!wasPublished && isPublished(blog)) {
+            mentionService.notifyMentions(blog.getAuthorId(), blog.getContent(),
+                    ITEM_TYPE_BLOG, blog.getId(), ITEM_TYPE_BLOG, blog.getId());
+        }
     }
 
     private Blog getExistingBlog(Long id) {

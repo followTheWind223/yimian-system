@@ -21,6 +21,7 @@ import com.yimian.system.mapper.TagMapper;
 import com.yimian.system.mapper.UserMapper;
 import com.yimian.system.service.HotDataService;
 import com.yimian.system.service.KnowledgeService;
+import com.yimian.system.service.MentionService;
 import com.yimian.system.vo.KnowledgeVO;
 import com.yimian.system.vo.KnowledgeVO.TagVO;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     private final SystemSettingMapper systemSettingMapper;
     private final UserMapper userMapper;
     private final HotDataService hotDataService;
+    private final MentionService mentionService;
 
     @Value("${audit.enabled:true}")
     private boolean defaultAuditEnabled;
@@ -69,6 +71,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         knowledgeMapper.insert(entity);
 
         bindTags(entity.getId(), dto.getTagIds());
+        notifyPublishedMentions(entity);
 
         log.info("直接上传知识题目成功: id={}, title={}, userId={}", entity.getId(), dto.getTitle(), userId);
         return buildVO(entity);
@@ -89,6 +92,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
         knowledgeMapper.insert(entity);
         bindTags(entity.getId(), dto.getTagIds());
+        notifyPublishedMentions(entity);
 
         log.info("提交知识题目: id={}, title={}, status={}, auditEnabled={}, userId={}",
                 entity.getId(), dto.getTitle(), entity.getStatus(), auditEnabled, userId);
@@ -126,6 +130,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
             knowledgeTagMapper.deleteByKnowledgeId(id);
             bindTags(id, dto.getTagIds());
         }
+        notifyPublishedMentions(entity);
 
         log.info("编辑知识题目成功: id={}, title={}, userId={}", id, dto.getTitle(), userId);
         return buildVO(entity);
@@ -303,6 +308,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         entity.setAuditTime(java.time.LocalDateTime.now());
         knowledgeMapper.updateById(entity);
         log.info("审核通过知识题目: id={}, title={}, auditorId={}", id, entity.getTitle(), auditorId);
+        notifyPublishedMentions(entity);
         // TODO: 5.3.2 异步调用 Agent RAG 入库
         return buildVO(entity);
     }
@@ -351,6 +357,13 @@ public class KnowledgeServiceImpl implements KnowledgeService {
             throw new BusinessException(ResultCode.KNOWLEDGE_NOT_FOUND);
         }
         return entity;
+    }
+
+    private void notifyPublishedMentions(Knowledge entity) {
+        if (entity != null && Integer.valueOf(1).equals(entity.getStatus())) {
+            mentionService.notifyMentions(entity.getSubmitUserId(), entity.getContent(),
+                    "knowledge", entity.getId(), "knowledge", entity.getId());
+        }
     }
 
     private void checkDuplicate(String hash) {

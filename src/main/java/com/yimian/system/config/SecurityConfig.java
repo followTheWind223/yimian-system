@@ -19,10 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/**
- * Spring Security 安全配置
- * 使用 JWT 无状态认证
- */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -36,48 +32,34 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // 禁用 CSRF（基于 Token，不需要 CSRF）
                 .csrf(AbstractHttpConfigurer::disable)
-                // 禁用 Session（无状态 JWT 模式）
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 异常处理
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
-                // 请求权限配置
                 .authorizeHttpRequests(auth -> auth
-                        // 公开接口
                         .requestMatchers(
                                 "/auth/login",
                                 "/auth/admin/login",
                                 "/auth/user/login",
                                 "/auth/register",
+                                "/auth/email-code/register",
+                                "/auth/email-code/reset-password",
+                                "/auth/password/reset",
                                 "/health"
                         ).permitAll()
-                        // 文件读取（公开）：/file/** 的 GET 请求无需登录
-                        .requestMatchers(HttpMethod.GET,
-                                "/file/**"
-                        ).permitAll()
-                        // API 文档
+                        .requestMatchers(HttpMethod.GET, "/file/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/webjars/**"
                         ).permitAll()
-                        // 静态资源
-                        .requestMatchers(HttpMethod.GET,
-                                "/", "/favicon.ico", "/static/**", "/public/**"
-                        ).permitAll()
-                        // OPTIONS 预检请求
+                        .requestMatchers(HttpMethod.GET, "/", "/favicon.ico", "/static/**", "/public/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // 其余请求需要认证
                         .anyRequest().authenticated()
                 )
-                // 添加 JWT 过滤器
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -88,8 +70,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
     }
 }

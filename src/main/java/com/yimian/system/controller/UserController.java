@@ -19,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 个人中心控制器（当前登录用户的操作）
  */
@@ -89,6 +91,14 @@ public class UserController {
                                              @RequestParam(defaultValue = "1") int page,
                                              @RequestParam(defaultValue = "20") int size) {
         return Result.success(userService.listFollowers(id, getCurrentUserId(), page, size));
+    }
+
+    @Operation(summary = "查询可 @ 的互关好友列表")
+    @GetMapping("/mentionable-friends")
+    @PreAuthorize("hasAuthority('user:view-public')")
+    public Result<List<UserVO>> mentionableFriends(@RequestParam(required = false) String keyword,
+                                                   @RequestParam(defaultValue = "10") Integer limit) {
+        return Result.success(userService.listMentionableFriends(getCurrentUserId(), keyword, limit));
     }
 
     @Operation(summary = "查看用户公开题目列表")

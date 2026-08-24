@@ -74,4 +74,27 @@
           AND (u.deleted IS NULL OR u.deleted = 0)
         ORDER BY f.created_at DESC, f.id DESC
     </select>
+
+    <select id="selectMutualFollowUsers" resultType="com.yimian.system.entity.User">
+        SELECT u.id, u.username, u.email, u.phone, u.nickname, u.avatar, u.status,
+               u.created_at, u.updated_at, u.last_login_time, u.last_login_ip
+        FROM sys_user_follow f1
+        INNER JOIN sys_user_follow f2
+                ON f2.follower_id = f1.followee_id
+               AND f2.followee_id = f1.follower_id
+               AND (f2.deleted IS NULL OR f2.deleted = 0)
+        INNER JOIN sys_user u ON u.id = f1.followee_id
+        WHERE f1.follower_id = #{userId}
+          AND (f1.deleted IS NULL OR f1.deleted = 0)
+          AND (u.deleted IS NULL OR u.deleted = 0)
+          AND u.status = 1
+        <if test="keyword != null and keyword != ''">
+          AND (
+              u.username LIKE CONCAT('%', #{keyword}, '%')
+              OR u.nickname LIKE CONCAT('%', #{keyword}, '%')
+          )
+        </if>
+        ORDER BY f1.created_at DESC, f1.id DESC
+        LIMIT #{limit}
+    </select>
 </mapper>
