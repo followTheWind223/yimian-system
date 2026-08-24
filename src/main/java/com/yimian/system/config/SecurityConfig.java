@@ -3,6 +3,7 @@ package com.yimian.system.config;
 import com.yimian.system.security.filter.JwtAuthenticationFilter;
 import com.yimian.system.security.handler.AccessDeniedHandlerImpl;
 import com.yimian.system.security.handler.AuthenticationEntryPointImpl;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +39,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(
                                 "/auth/login",
                                 "/auth/admin/login",

@@ -54,7 +54,7 @@ public class AgentController {
             logParams = false
     )
     @Operation(summary = "Agent stream chat")
-    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping("/chat/stream")
     public ResponseEntity<StreamingResponseBody> streamChat(@Valid @RequestBody AgentChatDto dto) {
         StreamingResponseBody body = agentProxyService.streamChat(getCurrentUserId(), dto);
         return ResponseEntity.ok()
