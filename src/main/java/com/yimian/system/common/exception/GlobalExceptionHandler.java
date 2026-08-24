@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -28,6 +30,22 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AgentProxyException.class)
+    public ResponseEntity<Result<Void>> handleAgentProxyException(AgentProxyException e,
+                                                                   HttpServletRequest request) {
+        log.warn("Agent 代理异常 [{}] {} - {}", request.getRequestURI(),
+                e.getResultCode().getCode(), e.getMessage());
+        HttpHeaders headers = new HttpHeaders();
+        if (e.getRetryAfterSeconds() > 0) {
+            headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(e.getRetryAfterSeconds()));
+        }
+        return new ResponseEntity<>(
+                Result.error(e.getResultCode()),
+                headers,
+                e.getHttpStatus()
+        );
+    }
 
     // ==================== 业务异常 ====================
 

@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.ApplicationContext;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,8 +37,8 @@ public class OperationLogModuleSyncRunner implements ApplicationRunner {
 
         Map<String, Object> controllers = applicationContext.getBeansWithAnnotation(RestController.class);
         for (Object bean : controllers.values()) {
-            Class<?> clazz = bean.getClass();
-            // 处理 CGLIB 代理：拿原始类的方法（Spring proxy 不影响 method annotation）
+            Class<?> clazz = AopUtils.getTargetClass(bean);
+            // AOP 代理类上的桥接方法不保留原方法注解，必须扫描目标 Controller 类。
             for (Method method : clazz.getDeclaredMethods()) {
                 OperationLog annotation = method.getAnnotation(OperationLog.class);
                 if (annotation != null) {

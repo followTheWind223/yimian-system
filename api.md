@@ -2003,3 +2003,101 @@ Query 参数：
 | `extra` | JSON 字符串，包含 `sourceType`、`sourceId`、`targetType`、`targetId`；其中 ID 字段按字符串写入，避免前端长整型精度丢失 |
 
 消息中心可通过 `/api/notifications?type=mention&page=1&size=20` 查看 “@我” 列表。
+
+---
+
+## 25. Agent 服务代理
+
+Agent 服务部署在独立服务器。浏览器只访问 Spring 后端的 `/api/agent/**`，Spring 完成 JWT 鉴权、用户级限流和操作审计后，再调用 `AGENT_SERVICE_BASE_URL` 指向的 Agent 服务。客户端不能提交或覆盖 `userId`。
+
+### 25.1 部署配置
+
+| 环境变量 | 默认值 | 说明 |
+|------|------|------|
+| `AGENT_SERVICE_ENABLED` | `false` | 是否启用 Agent 代理；未启用时接口返回 HTTP 503 |
+| `AGENT_SERVICE_BASE_URL` | `http://127.0.0.1:8000` | Agent 服务根地址，可配置为独立服务器 IP，例如 `http://10.0.0.8:8000` |
+| `AGENT_SERVICE_INTERNAL_TOKEN` | 空 | Spring 与 Agent 之间的内部 Bearer Token；启用 Agent 时必填 |
+| `AGENT_SERVICE_CONNECT_TIMEOUT` | `5s` | 建立连接超时 |
+| `AGENT_SERVICE_READ_TIMEOUT` | `120s` | 非流式请求读取超时 |
+| `AGENT_SERVICE_STREAM_READ_TIMEOUT` | `10m` | SSE 流式请求读取超时 |
+| `AGENT_SERVICE_RATE_LIMIT` | `20` | 单用户在一个窗口内最多发起的对话数 |
+| `AGENT_SERVICE_RATE_WINDOW` | `1m` | Redis 限流窗口 |
+
+Spring 调用 Agent 时会携带 `Authorization: Bearer <internal-token>`、`X-Yimian-Service: system` 和 `X-Request-Id`。生产环境应使用 HTTPS、内网或 VPN，并在 Agent 服务器防火墙中仅允许 Spring 服务器访问 Agent 端口。
+
+用户会话不会直接以原始 `sessionId` 写入 Agent。Spring 使用内部令牌对 `userId:sessionId` 生成 HMAC 会话键，保证不同用户之间的 Agent 上下文隔离。
+
+### 25.2 非流式对话
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/agent/chat` |
+| 请求方式 | `POST` |
+| 认证要求 | 携带用户 JWT |
+| Content-Type | `application/json` |
+
+**Request Body**
+
+```json
+{
+  "sessionId": "chat_01JABCDEF",
+  "message": "请根据知识库解释 Java 线程池的核心参数"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `sessionId` | String | 是 | 1-64 位，只能包含字母、数字、下划线和连字符；同一会话复用 |
+| `message` | String | 是 | 用户消息，最长 4000 个字符 |
+
+成功响应 `data`：
+
+```json
+{
+  "reply": "线程池的核心参数包括……",
+  "toolCalls": [],
+  "sessionId": "chat_01JABCDEF",
+  "requestId": "7bd7bf1d73674930b08f148b4a5dc11b"
+}
+```
+
+### 25.3 SSE 流式对话
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/agent/chat/stream` |
+| 请求方式 | `POST` |
+| 认证要求 | 携带用户 JWT |
+| Content-Type | `application/json` |
+| Accept | `text/event-stream` |
+
+请求体与非流式接口相同。响应事件：
+
+| event | data | 说明 |
+|------|------|------|
+| `meta` | `{"requestId":"...","sessionId":"..."}` | Spring 首先返回的请求追踪信息 |
+| `token` | `{"content":"..."}` | 模型增量文本 |
+| `tool_call` | `{"name":"...","args":{}}` | Agent 工具调用提示 |
+| `done` | `{"reply":"...","session_id":"..."}` | 对话完成；`session_id` 已由 Spring 改写为前端原始值 |
+| `error` | `{"error":"Agent 服务暂时不可用","requestId":"..."}` | 流建立后的失败事件，不暴露上游异常详情 |
+
+### 25.4 清理会话
+
+| 项目 | 值 |
+|------|-----|
+| 接口地址 | `/api/agent/sessions/{sessionId}` |
+| 请求方式 | `DELETE` |
+| 认证要求 | 携带用户 JWT |
+
+Spring 只会清理当前登录用户对应的 HMAC 会话，不允许跨用户清理。
+
+### 25.5 失败响应
+
+| HTTP 状态 | code | message | 场景 |
+|------|------|------|------|
+| `429` | `1705` | Agent 请求过于频繁，请稍后重试 | 超过 Redis 用户级限流，响应带 `Retry-After` |
+| `502` | `1706` | Agent 服务返回异常 | Agent 返回无法接受的 4xx 或响应结构异常 |
+| `503` | `1701` | Agent 服务未启用 | `AGENT_SERVICE_ENABLED=false` |
+| `503` | `1702` | Agent 服务配置不完整 | 启用后未配置内部令牌 |
+| `503` | `1703` | Agent 服务暂时不可用 | Agent 无法连接、上游 5xx 或 Redis 限流服务不可用 |
+| `504` | `1704` | Agent 服务响应超时 | 连接成功但在配置时间内没有完成响应 |

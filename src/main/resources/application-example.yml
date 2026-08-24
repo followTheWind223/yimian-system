@@ -1,0 +1,13 @@
+# Agent 服务部署在独立服务器时，将本段合并到实际 application.yml。
+# 生产环境请通过环境变量注入 internal-token，不要把真实令牌写入仓库。
+agent:
+  service:
+    enabled: ${AGENT_SERVICE_ENABLED:false}
+    base-url: ${AGENT_SERVICE_BASE_URL:http://127.0.0.1:8000}
+    internal-token: ${AGENT_SERVICE_INTERNAL_TOKEN:}
+    connect-timeout: ${AGENT_SERVICE_CONNECT_TIMEOUT:5s}
+    read-timeout: ${AGENT_SERVICE_READ_TIMEOUT:120s}
+    stream-read-timeout: ${AGENT_SERVICE_STREAM_READ_TIMEOUT:10m}
+    rate-limit:
+      max-requests: ${AGENT_SERVICE_RATE_LIMIT:20}
+      window: ${AGENT_SERVICE_RATE_WINDOW:1m}

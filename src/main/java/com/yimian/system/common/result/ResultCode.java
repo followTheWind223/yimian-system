@@ -58,6 +58,13 @@ public enum ResultCode {
 
     COMMENT_TARGET_INVALID(1601, "评论目标无效"),
     COMMENT_NOT_FOUND(1602, "评论不存在"),
+
+    AGENT_SERVICE_DISABLED(1701, "Agent 服务未启用"),
+    AGENT_SERVICE_MISCONFIGURED(1702, "Agent 服务配置不完整"),
+    AGENT_SERVICE_UNAVAILABLE(1703, "Agent 服务暂时不可用"),
+    AGENT_REQUEST_TIMEOUT(1704, "Agent 服务响应超时"),
+    AGENT_RATE_LIMITED(1705, "Agent 请求过于频繁，请稍后重试"),
+    AGENT_BAD_RESPONSE(1706, "Agent 服务返回异常"),
     ;
 
     private final Integer code;
