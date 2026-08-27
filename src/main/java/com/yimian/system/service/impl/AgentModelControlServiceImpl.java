@@ -59,6 +59,11 @@ public class AgentModelControlServiceImpl implements AgentModelControlService {
     }
 
     @Override
+    public AgentProviderTestVO testProviderConfig(AgentProviderCreateDto request) {
+        return post("/api/ai/admin/providers/test", request, AgentProviderTestVO.class);
+    }
+
+    @Override
     public List<AgentModelVO> listModels() {
         return getList("/api/ai/admin/models", AgentModelVO[].class);
     }

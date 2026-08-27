@@ -16,6 +16,7 @@ public interface AgentModelControlService {
     List<AgentProviderVO> listProviders();
     AgentProviderVO createProvider(AgentProviderCreateDto request);
     AgentProviderVO updateProvider(Long id, AgentProviderUpdateDto request);
+    AgentProviderTestVO testProviderConfig(AgentProviderCreateDto request);
     AgentProviderTestVO testProvider(Long id);
     List<AgentModelVO> listModels();
     AgentModelVO createModel(AgentModelCreateDto request);

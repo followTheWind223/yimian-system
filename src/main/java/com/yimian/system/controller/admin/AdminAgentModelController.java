@@ -63,6 +63,13 @@ public class AdminAgentModelController {
         return Result.success(modelControlService.updateProvider(id, request));
     }
 
+    @Operation(summary = "Test unsaved provider credentials")
+    @PostMapping("/providers/test")
+    @PreAuthorize("hasAuthority('agent:model:manage')")
+    public Result<AgentProviderTestVO> testProviderConfig(@Valid @RequestBody AgentProviderCreateDto request) {
+        return Result.success(modelControlService.testProviderConfig(request));
+    }
+
     @Operation(summary = "Test model provider connection")
     @PostMapping("/providers/{id}/test")
     @PreAuthorize("hasAuthority('agent:model:manage')")

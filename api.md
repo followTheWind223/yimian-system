@@ -2225,6 +2225,7 @@ Agent 内部对应接口为 `/api/chat/admin/stats`、`/api/chat/admin/sessions`
 | `/api/admin/agent/models/providers` | `POST` | `agent:model:manage` | 新增供应商和 API Key |
 | `/api/admin/agent/models/providers/{id}` | `PUT` | `agent:model:manage` | 修改供应商，空 API Key 表示保留原值 |
 | `/api/admin/agent/models/providers/{id}/test` | `POST` | `agent:model:manage` | 测试供应商连通性 |
+| `/api/admin/agent/models/providers/test` | `POST` | `agent:model:manage` | 测试未保存的 API Key |
 | `/api/admin/agent/models` | `GET` | `agent:model:list` | 查询模型部署 |
 | `/api/admin/agent/models` | `POST` | `agent:model:manage` | 新增模型 |
 | `/api/admin/agent/models/{id}` | `PUT` | `agent:model:manage` | 修改模型 |
