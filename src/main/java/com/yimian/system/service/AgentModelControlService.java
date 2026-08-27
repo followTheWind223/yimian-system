@@ -4,6 +4,7 @@ import com.yimian.system.dto.AgentModelCreateDto;
 import com.yimian.system.dto.AgentModelUpdateDto;
 import com.yimian.system.dto.AgentProviderCreateDto;
 import com.yimian.system.dto.AgentProviderUpdateDto;
+import com.yimian.system.dto.AgentProfileModelsUpdateDto;
 import com.yimian.system.vo.AgentModelVO;
 import com.yimian.system.vo.AgentProfileModelVO;
 import com.yimian.system.vo.AgentProfileVO;
@@ -21,4 +22,5 @@ public interface AgentModelControlService {
     AgentModelVO updateModel(Long id, AgentModelUpdateDto request);
     List<AgentProfileVO> listProfiles();
     List<AgentProfileModelVO> listProfileModels(String profileCode);
+    List<AgentProfileModelVO> updateProfileModels(String profileCode, AgentProfileModelsUpdateDto request);
 }

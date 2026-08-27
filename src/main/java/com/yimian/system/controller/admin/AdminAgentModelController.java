@@ -6,6 +6,7 @@ import com.yimian.system.dto.AgentModelCreateDto;
 import com.yimian.system.dto.AgentModelUpdateDto;
 import com.yimian.system.dto.AgentProviderCreateDto;
 import com.yimian.system.dto.AgentProviderUpdateDto;
+import com.yimian.system.dto.AgentProfileModelsUpdateDto;
 import com.yimian.system.service.AgentModelControlService;
 import com.yimian.system.vo.AgentModelVO;
 import com.yimian.system.vo.AgentProfileModelVO;
@@ -106,5 +107,15 @@ public class AdminAgentModelController {
     @PreAuthorize("hasAuthority('agent:model:list')")
     public Result<List<AgentProfileModelVO>> profileModels(@PathVariable String profileCode) {
         return Result.success(modelControlService.listProfileModels(profileCode));
+    }
+
+    @Operation(summary = "Update profile model bindings")
+    @OperationLog(module = "AGENT_MODEL", operation = "UPDATE_PROFILE_MODELS", logParams = false)
+    @PutMapping("/profiles/{profileCode}/models")
+    @PreAuthorize("hasAuthority('agent:model:manage')")
+    public Result<List<AgentProfileModelVO>> updateProfileModels(
+            @PathVariable String profileCode,
+            @Valid @RequestBody AgentProfileModelsUpdateDto request) {
+        return Result.success(modelControlService.updateProfileModels(profileCode, request));
     }
 }

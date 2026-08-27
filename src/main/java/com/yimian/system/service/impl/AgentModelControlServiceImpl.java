@@ -6,6 +6,7 @@ import com.yimian.system.dto.AgentModelCreateDto;
 import com.yimian.system.dto.AgentModelUpdateDto;
 import com.yimian.system.dto.AgentProviderCreateDto;
 import com.yimian.system.dto.AgentProviderUpdateDto;
+import com.yimian.system.dto.AgentProfileModelsUpdateDto;
 import com.yimian.system.service.AgentModelControlService;
 import com.yimian.system.vo.AgentModelVO;
 import com.yimian.system.vo.AgentProfileModelVO;
@@ -80,6 +81,17 @@ public class AgentModelControlServiceImpl implements AgentModelControlService {
     @Override
     public List<AgentProfileModelVO> listProfileModels(String profileCode) {
         return getList("/api/ai/profiles/{profileCode}/models", AgentProfileModelVO[].class, profileCode);
+    }
+
+    @Override
+    public List<AgentProfileModelVO> updateProfileModels(String profileCode, AgentProfileModelsUpdateDto request) {
+        AgentProfileModelVO[] response = put(
+                "/api/ai/admin/profiles/{profileCode}/models",
+                request,
+                AgentProfileModelVO[].class,
+                profileCode
+        );
+        return response == null ? List.of() : List.of(response);
     }
 
     private <T> List<T> getList(String path, Class<T[]> responseType, Object... uriVariables) {

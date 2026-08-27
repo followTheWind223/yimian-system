@@ -2230,6 +2230,7 @@ Agent 内部对应接口为 `/api/chat/admin/stats`、`/api/chat/admin/sessions`
 | `/api/admin/agent/models/{id}` | `PUT` | `agent:model:manage` | 修改模型 |
 | `/api/admin/agent/models/profiles` | `GET` | `agent:model:list` | 查询 Agent profile |
 | `/api/admin/agent/models/profiles/{profileCode}/models` | `GET` | `agent:model:list` | 查询 profile 可用模型 |
+| `/api/admin/agent/models/profiles/{profileCode}/models` | `PUT` | `agent:model:manage` | 替换 profile 模型绑定 |
 
 供应商字段：`providerCode`、`displayName`、`protocolType`、`baseUrl`、`apiKey`、`status`。`protocolType` 当前支持 `openai_compatible` 和 `anthropic`。模型字段包括 `modelCode`、`providerAccountId`、`upstreamModelName`、`displayName`、`modelType`、上下文窗口、最大输出 Token、能力参数和价格参数。
 
