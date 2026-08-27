@@ -66,6 +66,9 @@ public enum ResultCode {
     AGENT_RATE_LIMITED(1705, "Agent 请求过于频繁，请稍后重试"),
     AGENT_BAD_RESPONSE(1706, "Agent 服务返回异常"),
     AGENT_CHAT_SESSION_NOT_FOUND(1707, "Agent 会话不存在"),
+    AGENT_MODEL_CONFIG_NOT_FOUND(1708, "Agent model configuration not found"),
+    AGENT_MODEL_CONFIG_CONFLICT(1709, "Agent model configuration already exists"),
+    AGENT_MODEL_CONFIG_INVALID(1710, "Agent model configuration is invalid"),
     ;
 
     private final Integer code;

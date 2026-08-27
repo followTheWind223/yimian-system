@@ -49,4 +49,16 @@ public class AgentProxyException extends RuntimeException {
     public static AgentProxyException chatSessionNotFound() {
         return new AgentProxyException(ResultCode.AGENT_CHAT_SESSION_NOT_FOUND, HttpStatus.NOT_FOUND, 0);
     }
+
+    public static AgentProxyException modelConfigNotFound() {
+        return new AgentProxyException(ResultCode.AGENT_MODEL_CONFIG_NOT_FOUND, HttpStatus.NOT_FOUND, 0);
+    }
+
+    public static AgentProxyException modelConfigConflict() {
+        return new AgentProxyException(ResultCode.AGENT_MODEL_CONFIG_CONFLICT, HttpStatus.CONFLICT, 0);
+    }
+
+    public static AgentProxyException modelConfigInvalid() {
+        return new AgentProxyException(ResultCode.AGENT_MODEL_CONFIG_INVALID, HttpStatus.BAD_REQUEST, 0);
+    }
 }

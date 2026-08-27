@@ -2215,7 +2215,27 @@ Agent 内部接口统一错误结构如下。Spring 不会将内部错误详情�
 
 Agent 内部对应接口为 `/api/chat/admin/stats`、`/api/chat/admin/sessions` 和 `/api/chat/admin/sessions/{sessionId}`，仅接受 Spring 内部认证，不对浏览器开放。
 
-### 25.7 AI 用量统计
+### 25.7 AI 模型控制台
+
+浏览器只访问 System 管理接口，System 使用内部令牌代理 Agent。API Key 仅在创建或编辑提交时传输，Agent 加密存储，查询只返回 `credentialConfigured` 和 `credentialMasked`。
+
+| 接口 | 方法 | 权限 | 说明 |
+|------|------|------|------|
+| `/api/admin/agent/models/providers` | `GET` | `agent:model:list` | 查询模型供应商 |
+| `/api/admin/agent/models/providers` | `POST` | `agent:model:manage` | 新增供应商和 API Key |
+| `/api/admin/agent/models/providers/{id}` | `PUT` | `agent:model:manage` | 修改供应商，空 API Key 表示保留原值 |
+| `/api/admin/agent/models/providers/{id}/test` | `POST` | `agent:model:manage` | 测试供应商连通性 |
+| `/api/admin/agent/models` | `GET` | `agent:model:list` | 查询模型部署 |
+| `/api/admin/agent/models` | `POST` | `agent:model:manage` | 新增模型 |
+| `/api/admin/agent/models/{id}` | `PUT` | `agent:model:manage` | 修改模型 |
+| `/api/admin/agent/models/profiles` | `GET` | `agent:model:list` | 查询 Agent profile |
+| `/api/admin/agent/models/profiles/{profileCode}/models` | `GET` | `agent:model:list` | 查询 profile 可用模型 |
+
+供应商字段：`providerCode`、`displayName`、`protocolType`、`baseUrl`、`apiKey`、`status`。`protocolType` 当前支持 `openai_compatible` 和 `anthropic`。模型字段包括 `modelCode`、`providerAccountId`、`upstreamModelName`、`displayName`、`modelType`、上下文窗口、最大输出 Token、能力参数和价格参数。
+
+Agent 内部对应接口前缀为 `/api/ai`，只接受 System 内部认证。Agent 需要配置 `AGENT_CREDENTIAL_ENCRYPTION_KEY`，建议使用 Fernet 随机密钥。连通性测试默认请求供应商的 `{baseUrl}/models`，默认禁止访问内网地址，可通过 Agent 环境变量显式开启。
+
+### 25.8 AI 用量统计
 
 AI 用量统计与会话审计独立展示。统计数据从现有 Agent 消息和会话表实时聚合，不包含消息正文、请求载荷或内部 metadata。
 
